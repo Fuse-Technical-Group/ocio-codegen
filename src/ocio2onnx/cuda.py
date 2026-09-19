@@ -219,8 +219,14 @@ __device__ vec3 mix(vec3 a, vec3 b, float t) {
     return vec3(mix(a.x, b.x, t), mix(a.y, b.y, t), mix(a.z, b.z, t));
 }
 __device__ float dot(vec3 a, vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+__device__ vec3 greaterThan(vec3 a, vec3 b) {
+    return vec3(a.x > b.x, a.y > b.y, a.z > b.z);
+}
 __device__ vec4 greaterThan(vec4 a, vec4 b) {
     return vec4(a.x > b.x, a.y > b.y, a.z > b.z, a.w > b.w);
+}
+__device__ vec3 lessThan(vec3 a, vec3 b) {
+    return vec3(a.x < b.x, a.y < b.y, a.z < b.z);
 }
 __device__ vec4 lessThan(vec4 a, vec4 b) {
     return vec4(a.x < b.x, a.y < b.y, a.z < b.z, a.w < b.w);

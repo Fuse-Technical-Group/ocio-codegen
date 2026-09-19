@@ -48,6 +48,16 @@ def untonemapped(config, config_uri):
 
 
 @pytest.fixture(scope="module")
+def red_log_camera(config, config_uri):
+    """A camera log source into the ACES 2.0 render: the shader's LogCamera
+    segment compares three-component vectors, where the ACES chain alone
+    compares only four."""
+    return resolve_display_view(
+        config, DISPLAY, ACES2_VIEW, src="Log3G10 REDWideGamutRGB", uri=config_uri
+    )
+
+
+@pytest.fixture(scope="module")
 def source(aces2_sdr):
     return cuda.kernel_source(aces2_sdr)
 
@@ -149,6 +159,12 @@ class TestKernel:
 
     def test_closed_form_kernel_agrees(self, untonemapped):
         result = cuda.verify(untonemapped)
+        assert result.ok, str(result)
+
+    def test_camera_log_source_compiles_and_agrees(self, red_log_camera):
+        """A camera log curve's shader compares vec3s; the kernel compiles and
+        agrees with the oracle from that source too."""
+        result = cuda.verify(red_log_camera)
         assert result.ok, str(result)
 
     def test_f16_entry_point_tracks_f32(self, aces2_sdr, source):
