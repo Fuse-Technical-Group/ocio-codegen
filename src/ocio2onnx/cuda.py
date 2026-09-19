@@ -82,17 +82,14 @@ _CONST_ARRAY = re.compile(r"const float (\w+)\[(\d+)\] = float\[\d+\]\((.*?)\);"
 #: A file-scope function definition, which device code must mark.
 _FUNCTION = re.compile(r"^((?:float|int|bool|void|vec[234]|mat[34]) \w+\()", re.M)
 
-#: The support code every generated kernel carries: GLSL's vector and matrix
-#: types over CUDA's, the builtins the emitted dialect calls, and half
-#: conversion by PTX so the file needs no header. Swizzle field reads and
-#: writes become the ``rgb()``/``set_rgb()`` calls the rewrites produce —
-#: ``x/y/z/w`` and ``r/g/b/a`` stay plain members via the union. Tables are
-#: global memory deliberately: divergent indices (the cusp search) serialize
-#: the constant cache 32-way, measured at 5x the whole kernel's cost.
-_PRELUDE = r"""
+#: GLSL's vector types over plain floats. Swizzle field reads and writes
+#: become the ``rgb()``/``set_rgb()`` calls the rewrites produce — ``x/y/z/w``
+#: and ``r/g/b/a`` stay plain members via the union.
+_TYPES = r"""
 struct vec2 {
     union { struct { float x, y; }; struct { float r, g; }; };
     __device__ vec2() { x = 0.f; y = 0.f; }
+    __device__ explicit vec2(float s) { x = s; y = s; }
     __device__ vec2(float x_, float y_) { x = x_; y = y_; }
 };
 
@@ -109,41 +106,20 @@ struct vec3 {
 struct vec4 {
     union { struct { float x, y, z, w; }; struct { float r, g, b, a; }; };
     __device__ vec4() { x = 0.f; y = 0.f; z = 0.f; w = 0.f; }
+    __device__ explicit vec4(float s) { x = s; y = s; z = s; w = s; }
     __device__ vec4(float x_, float y_, float z_, float w_) {
         x = x_; y = y_; z = z_; w = w_;
     }
+    __device__ vec4(vec3 v, float w_) { x = v.x; y = v.y; z = v.z; w = w_; }
     __device__ vec3 rgb() const { return vec3(x, y, z); }
     __device__ void set_rgb(vec3 v) { x = v.x; y = v.y; z = v.z; }
     __device__ vec2 rg() const { return vec2(x, y); }
 };
+"""
 
-__device__ vec3 operator+(vec3 a, vec3 b) {
-    return vec3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-__device__ vec3 operator-(vec3 a, vec3 b) {
-    return vec3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-__device__ vec3 operator*(vec3 a, vec3 b) {
-    return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
-}
-__device__ vec3 operator/(vec3 a, vec3 b) {
-    return vec3(a.x / b.x, a.y / b.y, a.z / b.z);
-}
-__device__ vec3 operator+(float s, vec3 a) { return vec3(s + a.x, s + a.y, s + a.z); }
-__device__ vec3 operator-(float s, vec3 a) { return vec3(s - a.x, s - a.y, s - a.z); }
-__device__ vec3 operator*(float s, vec3 a) { return vec3(s * a.x, s * a.y, s * a.z); }
-__device__ vec3 operator*(vec3 a, float s) { return s * a; }
-__device__ vec3 operator/(vec3 a, float s) { return vec3(a.x / s, a.y / s, a.z / s); }
-__device__ vec4 operator+(vec4 a, vec4 b) {
-    return vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
-}
-__device__ vec4 operator-(vec4 a, vec4 b) {
-    return vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
-}
-__device__ vec4 operator*(vec4 a, vec4 b) {
-    return vec4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
-}
-
+#: GLSL's matrices, and the scalar builtins `_vector_code` does not generate.
+#: sign(0) is 0, which copysign is not.
+_MATRICES_AND_SCALARS = r"""
 // GLSL matrix constructors are column-major; storage keeps that order.
 struct mat3 {
     float m[9];
@@ -177,61 +153,17 @@ __device__ vec4 operator*(mat4 a, vec4 v) {
                 a.m[3] * v.x + a.m[7] * v.y + a.m[11] * v.z + a.m[15] * v.w);
 }
 
-// GLSL builtins over the types above. sign(0) is 0, which copysign is not.
 __device__ float sign(float x) { return (float)((x > 0.f) - (x < 0.f)); }
-__device__ vec3 sign(vec3 v) { return vec3(sign(v.x), sign(v.y), sign(v.z)); }
-__device__ vec4 sign(vec4 v) {
-    return vec4(sign(v.x), sign(v.y), sign(v.z), sign(v.w));
-}
-__device__ float abs(float x) { return fabsf(x); }
-__device__ vec3 abs(vec3 v) { return vec3(fabsf(v.x), fabsf(v.y), fabsf(v.z)); }
-__device__ vec4 abs(vec4 v) {
-    return vec4(fabsf(v.x), fabsf(v.y), fabsf(v.z), fabsf(v.w));
-}
-__device__ float floor(float x) { return floorf(x); }
-__device__ float sqrt(float x) { return sqrtf(x); }
-__device__ float log(float x) { return logf(x); }
-__device__ float exp(float x) { return expf(x); }
-__device__ float log2(float x) { return log2f(x); }
-__device__ float exp2(float x) { return exp2f(x); }
-__device__ float cos(float x) { return cosf(x); }
-__device__ float sin(float x) { return sinf(x); }
-__device__ float atan(float y, float x) { return atan2f(y, x); }
-__device__ float atan(float x) { return atanf(x); }
-__device__ float pow(float x, float y) { return powf(x, y); }
-__device__ vec3 pow(vec3 v, vec3 e) {
-    return vec3(powf(v.x, e.x), powf(v.y, e.y), powf(v.z, e.z));
-}
-__device__ vec4 pow(vec4 v, vec4 e) {
-    return vec4(powf(v.x, e.x), powf(v.y, e.y), powf(v.z, e.z), powf(v.w, e.w));
-}
-__device__ float min(float a, float b) { return fminf(a, b); }
-__device__ float max(float a, float b) { return fmaxf(a, b); }
-__device__ vec3 min(vec3 a, vec3 b) {
-    return vec3(fminf(a.x, b.x), fminf(a.y, b.y), fminf(a.z, b.z));
-}
-__device__ vec3 max(vec3 a, vec3 b) {
-    return vec3(fmaxf(a.x, b.x), fmaxf(a.y, b.y), fmaxf(a.z, b.z));
-}
+__device__ float step(float edge, float x) { return x < edge ? 0.f : 1.f; }
 __device__ float clamp(float x, float lo, float hi) { return fminf(fmaxf(x, lo), hi); }
 __device__ float mix(float a, float b, float t) { return a + (b - a) * t; }
-__device__ vec3 mix(vec3 a, vec3 b, float t) {
-    return vec3(mix(a.x, b.x, t), mix(a.y, b.y, t), mix(a.z, b.z, t));
-}
-__device__ float dot(vec3 a, vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-__device__ vec3 greaterThan(vec3 a, vec3 b) {
-    return vec3(a.x > b.x, a.y > b.y, a.z > b.z);
-}
-__device__ vec4 greaterThan(vec4 a, vec4 b) {
-    return vec4(a.x > b.x, a.y > b.y, a.z > b.z, a.w > b.w);
-}
-__device__ vec3 lessThan(vec3 a, vec3 b) {
-    return vec3(a.x < b.x, a.y < b.y, a.z < b.z);
-}
-__device__ vec4 lessThan(vec4 a, vec4 b) {
-    return vec4(a.x < b.x, a.y < b.y, a.z < b.z, a.w < b.w);
-}
+__device__ float atan(float y, float x) { return atan2f(y, x); }
+__device__ float pow(float x, float y) { return powf(x, y); }
+__device__ float min(float a, float b) { return fminf(a, b); }
+__device__ float max(float a, float b) { return fmaxf(a, b); }
+"""
 
+_HALF = r"""
 __device__ float half_to_float(unsigned short h) {
     float f;
     asm("cvt.f32.f16 %0, %1;" : "=f"(f) : "h"(h));
@@ -243,6 +175,120 @@ __device__ unsigned short float_to_half(float f) {
     return h;
 }
 """
+
+#: Each vector type and its components.
+_VECTORS = {"vec2": "xy", "vec3": "xyz", "vec4": "xyzw"}
+
+#: GLSL's componentwise builtins as OCIO's GPU emitters call them: the name,
+#: the float function each component reduces to, and the argument shapes —
+#: ``v`` a vector, ``s`` a float. The shapes are GLSL 4.0's genType forms,
+#: plus the scalar-first ``min``/``max`` OCIO spells ``max(0.01, v)``. A
+#: component function spelled as the builtin itself is defined above; each
+#: unary one reducing to a libm function also gets its scalar form here.
+_COMPONENTWISE = (
+    ("abs", "fabsf", ("v",)),
+    ("sign", "sign", ("v",)),
+    ("floor", "floorf", ("v",)),
+    ("ceil", "ceilf", ("v",)),
+    ("sqrt", "sqrtf", ("v",)),
+    ("exp", "expf", ("v",)),
+    ("exp2", "exp2f", ("v",)),
+    ("log", "logf", ("v",)),
+    ("log2", "log2f", ("v",)),
+    ("sin", "sinf", ("v",)),
+    ("cos", "cosf", ("v",)),
+    ("atan", "atanf", ("v",)),
+    ("atan", "atan2f", ("vv",)),
+    ("pow", "powf", ("vv",)),
+    ("min", "fminf", ("vv", "vs", "sv")),
+    ("max", "fmaxf", ("vv", "vs", "sv")),
+    ("step", "step", ("vv", "sv")),
+    ("clamp", "clamp", ("vvv", "vss")),
+    ("mix", "mix", ("vvv", "vvs")),
+)
+
+#: GLSL's vector comparisons return a bool vector that OCIO's shaders only
+#: ever convert to a float one; returning the float vector directly is the
+#: same value.
+_COMPARISONS = {
+    "greaterThan": ">",
+    "lessThan": "<",
+    "greaterThanEqual": ">=",
+    "lessThanEqual": "<=",
+}
+
+_ARGUMENTS = "abc"
+
+
+def _vector_code() -> str:
+    """The arithmetic and builtins over every vector width, generated.
+
+    One table rather than a hand-written overload per width and shape: the
+    shader text decides which forms a transform reaches, and a form missing
+    here is an NVRTC error in whichever transform first reaches it.
+    """
+    lines = [
+        f"__device__ float {name}(float a) {{ return {function}(a); }}"
+        for name, function, shapes in _COMPONENTWISE
+        if shapes == ("v",) and function != name
+    ]
+    for vector, fields in _VECTORS.items():
+
+        def build(expression: str, fields: str = fields, vector: str = vector) -> str:
+            return f"{vector}({', '.join(expression.format(f=f) for f in fields)})"
+
+        for op in "+-*/":
+            for left, right in (("v", "v"), ("v", "s"), ("s", "v")):
+                a = "a.{f}" if left == "v" else "a"
+                b = "b.{f}" if right == "v" else "b"
+                lines.append(
+                    f"__device__ {vector} operator{op}("
+                    f"{vector if left == 'v' else 'float'} a, "
+                    f"{vector if right == 'v' else 'float'} b) "
+                    f"{{ return {build(f'{a} {op} {b}')}; }}"
+                )
+            for right in (vector, "float"):
+                lines.append(
+                    f"__device__ {vector}& operator{op}=({vector}& a, {right} b) "
+                    f"{{ a = a {op} b; return a; }}"
+                )
+        lines.append(
+            f"__device__ {vector} operator-({vector} a) {{ return {build('-a.{f}')}; }}"
+        )
+        for name, function, shapes in _COMPONENTWISE:
+            for shape in shapes:
+                parameters = ", ".join(
+                    f"{vector if kind == 'v' else 'float'} {argument}"
+                    for kind, argument in zip(shape, _ARGUMENTS, strict=False)
+                )
+                call = ", ".join(
+                    argument + (".{f}" if kind == "v" else "")
+                    for kind, argument in zip(shape, _ARGUMENTS, strict=False)
+                )
+                lines.append(
+                    f"__device__ {vector} {name}({parameters}) "
+                    f"{{ return {build(f'{function}({call})')}; }}"
+                )
+        for name, op in _COMPARISONS.items():
+            lines.append(
+                f"__device__ {vector} {name}({vector} a, {vector} b) "
+                f"{{ return {build(f'(float)(a.{{f}} {op} b.{{f}})')}; }}"
+            )
+        dot = " + ".join(f"a.{f} * b.{f}" for f in fields)
+        anything = " || ".join(f"a.{f} != 0.f" for f in fields)
+        lines.append(
+            f"__device__ float dot({vector} a, {vector} b) {{ return {dot}; }}"
+        )
+        lines.append(f"__device__ bool any({vector} a) {{ return {anything}; }}")
+    return "\n".join(lines) + "\n"
+
+
+#: The support code every generated kernel carries: GLSL's vector and matrix
+#: types over CUDA's, the builtins the emitted dialect calls, and half
+#: conversion by PTX so the file needs no header. Tables are global memory
+#: deliberately: divergent indices (the cusp search) serialize the constant
+#: cache 32-way, measured at 5x the whole kernel's cost.
+_PRELUDE = _TYPES + _MATRICES_AND_SCALARS + _vector_code() + _HALF
 
 #: The entry points. Planar RGB in and out, one thread per pixel; the fourth
 #: channel exists only inside the call, at zero, and is never read back —
