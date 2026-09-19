@@ -31,6 +31,23 @@ jobs:
       # Pinned to 3.12: opencolorio publishes no wheel for 3.13+.
       - run: bash tools/ci.sh
 
+  # The ruleset requires a `shellcheck` check. The file list comes from git
+  # rather than a glob, so an untracked scratch script cannot fail the build
+  # and a script added anywhere is covered without editing this workflow.
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: ShellCheck
+        run: |
+          mapfile -t scripts < <(git ls-files '*.sh' '*.bash')
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "No tracked shell scripts."
+            exit 0
+          fi
+          printf 'checking %s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"
+
   #
   # SPEC status lines, slug-suffix heading grammar, and §-reference
   # resolution are validated by the symphonize notation contract in
