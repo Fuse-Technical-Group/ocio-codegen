@@ -101,7 +101,9 @@ the fused kernel on the same GPU. The `.cu` file is self-contained: NVRTC
 compiles it with `--use_fast_math` and no include paths, and it exposes
 planar RGB `apply_f32`/`apply_f16` entry points. With `--verify`, the
 kernel is also compiled, run, and held against the CPU processor, which
-needs a CUDA device and the `cuda` extra:
+needs a CUDA device and the `cuda` extra. Across the pinned config, 119 of
+159 transforms produce a kernel that compiles and verifies; the other 40
+carry a 1D LUT the transpiler refuses, and the graph serves them:
 
 ```sh
 ocio2onnx compile --display "sRGB - Display" --view "ACES 2.0 - SDR 100 nits (Rec.709)" \
