@@ -422,6 +422,8 @@ cuda = [
     { name = "nvidia-cuda-nvrtc" },
 ]
 dev = [
+    { name = "cuda-python", marker = "sys_platform != 'darwin'" },
+    { name = "nvidia-cuda-nvrtc", marker = "sys_platform != 'darwin'" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -435,6 +437,7 @@ requires-dist = [
     { name = "cuda-python", marker = "extra == 'cuda'", specifier = ">=13" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "nvidia-cuda-nvrtc", marker = "extra == 'cuda'", specifier = ">=13" },
+    { name = "ocio2onnx", extras = ["cuda"], marker = "sys_platform != 'darwin' and extra == 'dev'" },
     { name = "onnx", specifier = ">=1.17" },
     { name = "onnxruntime", marker = "extra == 'verify'", specifier = ">=1.19" },
     { name = "opencolorio", specifier = ">=2.5,<3" },
