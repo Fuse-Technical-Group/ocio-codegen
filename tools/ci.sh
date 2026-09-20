@@ -10,6 +10,8 @@ cd "$(dirname "$0")/.."
 UV="${UV:-uv}"
 # --locked: a dependency edit that outruns uv.lock fails here rather than
 # resolving something nobody reviewed.
+# The dev extra carries NVRTC: the suite compiles every transpiled kernel for a
+# fixed architecture, which needs no GPU (§spec:cuda-kernel).
 RUN=("$UV" run --locked --python 3.12 --extra verify --extra dev)
 
 "${RUN[@]}" ruff check .

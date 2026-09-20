@@ -9,12 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  # Validate governance docs against the symphonize notation contract:
+  # markdownlint, SPEC status lines, slug-suffix heading grammar, and
+  # §-reference resolution. The contract is maintained upstream; pinning
+  # @notation--v0 tracks the pre-1.0 notation major line. It lives here
+  # rather than in its own workflow because a summary job can only depend
+  # on jobs in the same workflow.
+  governance:
+    uses: repentsinner/symphonize/.github/workflows/governance-lint.yml@notation--v0
+    with:
+      # README is a pre-implementation landing page; empty type skips
+      # README heading validation until the library ships a usage surface.
+      readme-type: ""
+
   markdownlint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       # Lint root governance/landing docs (README, SPEC, ROADMAP).
-      # Config: .markdownlint.json + .markdownlint-cli2.jsonc.
+      # Config: .markdownlint-cli2.jsonc.
       - uses: DavidAnson/markdownlint-cli2-action@v24
         with:
           globs: "*.md"
@@ -48,7 +61,33 @@ jobs:
           printf 'checking %s\n' "${scripts[@]}"
           shellcheck "${scripts[@]}"
 
-  #
-  # SPEC status lines, slug-suffix heading grammar, and §-reference
-  # resolution are validated by the symphonize notation contract in
-  # governance-lint.yml.
+  # Summary jobs carry the required check names. Each runs whatever its
+  # dependencies' outcome, because GitHub counts a skipped required check as
+  # passing.
+  quality-governance:
+    name: quality / governance
+    needs: [governance, markdownlint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a governance job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1
+
+  quality-correctness:
+    name: quality / correctness
+    needs: [python, shellcheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a correctness job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1

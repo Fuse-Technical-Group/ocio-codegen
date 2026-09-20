@@ -11,6 +11,7 @@ OCIO's own GPU renderer occupies against its CPU renderer.
 """
 
 import re
+import sys
 
 import numpy as np
 import PyOpenColorIO as OCIO
@@ -18,8 +19,12 @@ import pytest
 
 from ocio2onnx import cuda
 from ocio2onnx.addressing import (
+    DEFAULT_CONFIG,
     OPTIMIZATION_FLAGS,
     Resolved,
+    enumerate_transforms,
+    reference_space,
+    resolve_colorspaces,
     resolve_display_view,
 )
 
@@ -33,6 +38,124 @@ ACES2_VIEW = "ACES 2.0 - SDR 100 nits (Rec.709)"
 PLAIN_VIEW = "Un-tone-mapped"
 
 
+#: The architecture the census compiles for: the oldest NVRTC 13 targets, so
+#: a kernel that compiles here compiles for every device the toolkit serves.
+#: NVRTC needs no device to compile, so the census runs in CPU-only CI.
+CENSUS_ARCH = "compute_75"
+
+#: The fused-kernel partition of the pinned config's 159 transforms
+#: (§spec:cuda-kernel). ``refused`` carries a ``Lut1D`` whose table OCIO
+#: publishes as a two-dimensional texture, which the transpiler names and the
+#: graph serves; ``compiled`` is every other transform, through NVRTC.
+#: Pinned the way ``test_census.OP_CENSUS`` is: a builtin form the prelude
+#: lacks moves a transform out of ``compiled``.
+KERNEL_CENSUS = {"compiled": 119, "refused": 40}
+
+#: Every closed-form curve family the pinned config carries, each named by
+#: one color space: the camera log curves (``LogCamera``, ``Log``) and the
+#: display gammas (``ExponentWithLinear``, ``Exponent``). Their shaders mix
+#: vector and scalar builtin arguments that the ACES chain does not.
+CURVES = [
+    "Log3G10 REDWideGamutRGB",
+    "ACEScct",
+    "ARRI LogC3 (EI800)",
+    "ARRI LogC4",
+    "BMDFilm WideGamut Gen5",
+    "DaVinci Intermediate WideGamut",
+    "D-Log D-Gamut",
+    "V-Log V-Gamut",
+    "S-Log3 S-Gamut3",
+    "sRGB Encoded Rec.709 (sRGB)",
+    "Gamma 2.4 Encoded Rec.709",
+    "Camera Rec.709",
+]
+
+UNARY_BUILTINS = (
+    "abs",
+    "sign",
+    "floor",
+    "ceil",
+    "sqrt",
+    "exp",
+    "exp2",
+    "log",
+    "log2",
+    "sin",
+    "cos",
+    "atan",
+)
+
+#: One call per GLSL builtin form OCIO's GPU emitters write, over every
+#: vector width: componentwise math, the mixed vector/scalar forms GLSL 4.0
+#: defines for ``min``/``max``/``clamp``/``mix``/``step``, the scalar-first
+#: ``max(0.01, v)`` spelling OCIO emits, and the comparisons it wraps in a
+#: vector constructor. ``V`` stands for the width under test.
+BUILTIN_FORMS = [
+    *(f"{name}(v)" for name in UNARY_BUILTINS),
+    "pow(v, v)",
+    "atan(v, v)",
+    "min(v, v)",
+    "min(v, s)",
+    "min(s, v)",
+    "max(v, v)",
+    "max(v, s)",
+    "max(s, v)",
+    "step(v, v)",
+    "step(s, v)",
+    "clamp(v, v, v)",
+    "clamp(v, s, s)",
+    "mix(v, v, v)",
+    "mix(v, v, s)",
+    "V(greaterThan(v, v))",
+    "V(lessThan(v, v))",
+    "V(greaterThanEqual(v, v))",
+    "V(lessThanEqual(v, v))",
+    "V(any(greaterThan(v, v)) ? s : dot(v, v))",
+    "v + v * v - v / v",
+    "s + v * s - v / s",
+    "s * v - s / v",
+    "-v",
+    "V(s)",
+]
+
+
+def compiles(source):
+    """NVRTC's verdict on a source, at the census architecture, on no device."""
+    cuda.compile_ptx(source, CENSUS_ARCH)
+
+
+def kernel_census(config):
+    """Each transform in the pinned config with its kernel source, or with
+    the transpiler's refusal in place of one."""
+    for label, processor in enumerate_transforms(config, uri=DEFAULT_CONFIG):
+        resolved = Resolved(
+            processor=processor,
+            config_name="census",
+            config_uri=DEFAULT_CONFIG,
+            endpoints=label,
+        )
+        try:
+            source = cuda.kernel_source(resolved)
+        except cuda.UnsupportedShaderError as refusal:
+            yield label, resolved, None, refusal
+        else:
+            yield label, resolved, source, None
+
+
+@pytest.fixture(scope="module")
+def nvrtc():
+    """NVRTC, which the dev extra installs wherever NVIDIA publishes it.
+
+    Absent only on macOS, where no wheel exists; anywhere else a missing
+    library is a broken environment, and the census fails rather than skips.
+    """
+    if sys.platform == "darwin":
+        pytest.importorskip("cuda.bindings.nvrtc")
+    from cuda.bindings import nvrtc
+
+    return nvrtc
+
+
 @pytest.fixture(scope="module")
 def aces2_sdr(config, config_uri):
     return resolve_display_view(
@@ -44,6 +167,16 @@ def aces2_sdr(config, config_uri):
 def untonemapped(config, config_uri):
     return resolve_display_view(
         config, DISPLAY, PLAIN_VIEW, src="ACEScg", uri=config_uri
+    )
+
+
+@pytest.fixture(scope="module")
+def red_log_camera(config, config_uri):
+    """A camera log source into the ACES 2.0 render: the shader's LogCamera
+    segment compares three-component vectors, where the ACES chain alone
+    compares only four."""
+    return resolve_display_view(
+        config, DISPLAY, ACES2_VIEW, src="Log3G10 REDWideGamutRGB", uri=config_uri
     )
 
 
@@ -130,6 +263,45 @@ class TestRefusal:
             cuda.kernel_source(bare(config, config_uri, transform))
 
 
+@pytest.mark.usefixtures("nvrtc")
+class TestCompile:
+    """Every kernel the transpiler emits compiles. NVRTC compiles for a named
+    architecture without a device, so this holds in CPU-only CI."""
+
+    @pytest.mark.parametrize("width", ["vec2", "vec3", "vec4"])
+    @pytest.mark.parametrize("form", BUILTIN_FORMS)
+    def test_prelude_carries_builtin_form(self, form, width):
+        expression = form.replace("V(", f"{width}(")
+        compiles(
+            cuda._PRELUDE
+            + f"__device__ {width} probe({width} v, float s) {{\n"
+            + f"    {width} r = v;\n"
+            + f"    r = {width}({expression});\n"
+            + "    r += v; r -= v; r *= v; r /= v; r *= s; r /= s;\n"
+            + "    return r;\n}\n"
+        )
+
+    def test_every_transform_compiles_or_is_refused(self, config):
+        """The census the specification quotes. A transpiled kernel NVRTC
+        rejects is a failure naming the transform and NVRTC's first error."""
+        census = {"compiled": 0, "refused": 0}
+        failures = []
+        for label, _, source, refusal in kernel_census(config):
+            if refusal is not None:
+                assert "ocio_lut1d" in str(refusal), label
+                census["refused"] += 1
+                continue
+            try:
+                compiles(source)
+            except RuntimeError as exc:
+                errors = re.findall(r"error: (.*)", str(exc))
+                failures.append((label, errors[:1]))
+                continue
+            census["compiled"] += 1
+        assert failures == []
+        assert census == KERNEL_CENSUS
+
+
 @pytest.fixture(scope="module")
 def cuda_runtime():
     """Skip where the NVRTC library or a CUDA device is absent, so the
@@ -150,6 +322,34 @@ class TestKernel:
     def test_closed_form_kernel_agrees(self, untonemapped):
         result = cuda.verify(untonemapped)
         assert result.ok, str(result)
+
+    def test_camera_log_source_compiles_and_agrees(self, red_log_camera):
+        """A camera log curve's shader compares vec3s; the kernel compiles and
+        agrees with the oracle from that source too."""
+        result = cuda.verify(red_log_camera)
+        assert result.ok, str(result)
+
+    @pytest.mark.parametrize("direction", ["decode", "encode"])
+    @pytest.mark.parametrize("space", CURVES)
+    def test_curve_agrees(self, config, config_uri, space, direction):
+        """Each curve family both ways against the reference. The encode
+        direction takes vector ``log`` and scalar-first ``max``."""
+        reference = reference_space(config)
+        src, dst = (space, reference) if direction == "decode" else (reference, space)
+        result = cuda.verify(resolve_colorspaces(config, src, dst, uri=config_uri))
+        assert result.ok, str(result)
+
+    def test_every_compiled_transform_agrees(self, config):
+        """The census, executed: every transform the transpiler accepts
+        agrees with the oracle at `GPU_TOLERANCE`."""
+        disagreements = []
+        for label, resolved, source, refusal in kernel_census(config):
+            if refusal is not None:
+                continue
+            result = cuda.verify(resolved, source)
+            if not result.ok:
+                disagreements.append((label, str(result)))
+        assert disagreements == []
 
     def test_f16_entry_point_tracks_f32(self, aces2_sdr, source):
         """The half kernel is the same arithmetic behind quantized edges, so

@@ -29,7 +29,10 @@ verify = ["onnxruntime>=1.19"]
 # NVRTC library. Generating its source does not, so these stay optional the
 # same way the ONNX runtime does (§spec:cuda-kernel).
 cuda = ["cuda-python>=13", "nvidia-cuda-nvrtc>=13"]
-dev = ["pytest>=8", "ruff>=0.6"]
+# The test suite compiles every transpiled kernel with NVRTC, which needs no
+# device, so CPU-only CI carries the cuda extra too (§spec:cuda-kernel).
+# NVIDIA publishes no macOS wheel; there the compile census skips.
+dev = ["ocio2onnx[cuda]; sys_platform != 'darwin'", "pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 ocio2onnx = "ocio2onnx.cli:main"

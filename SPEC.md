@@ -496,6 +496,18 @@ property the kernel would bake stale; and an interpolated or
 multi-dimensional texture, which is a LUT — the graph already carries
 those at full speed, so the refusal names the artifact that serves them.
 
+Coverage is measured, as the op census is. Of the pinned config's 159
+transforms, 119 transpile, compile, and agree with the oracle; the other
+40 carry a `Lut1D` whose table OCIO publishes as a two-dimensional texture,
+and are refused. No transform transpiles and then fails to compile. The
+prelude generates every GLSL builtin form OCIO's GPU emitters write —
+componentwise math over `vec2`/`vec3`/`vec4`, the mixed vector and scalar
+forms, the comparisons — from one table, because the shader text decides
+which forms a transform reaches, and a missing overload surfaces only as an
+NVRTC error in whichever transform first reaches it. NVRTC compiles for a
+named architecture without a device, so the suite compiles all 119 kernels
+in CPU-only CI and pins both counts; executing them stays GPU-gated.
+
 Verification holds the compiled kernel against the same lattice and CPU
 reference as the graph, at its own bound (`cuda.GPU_TOLERANCE`): GPU
 transcendentals are not libm, and OCIO's GPU renderer sits the same
