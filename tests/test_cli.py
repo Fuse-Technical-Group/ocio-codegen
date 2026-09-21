@@ -22,9 +22,9 @@ import re
 import onnx
 import pytest
 
-from ocio2onnx.addressing import DEFAULT_CONFIG, METADATA_PREFIX
-from ocio2onnx.builder import PRECISION
-from ocio2onnx.cli import (
+from ocio_codegen.addressing import DEFAULT_CONFIG, METADATA_PREFIX
+from ocio_codegen.builder import PRECISION
+from ocio_codegen.cli import (
     CANNOT_RESOLVE,
     FAILED,
     OK,
@@ -67,7 +67,7 @@ def test_the_console_script_points_at_this_entry_point():
     (script,) = [
         entry
         for entry in importlib.metadata.entry_points(group="console_scripts")
-        if entry.name == "ocio2onnx"
+        if entry.name == "ocio-codegen"
     ]
     assert script.load() is main
 

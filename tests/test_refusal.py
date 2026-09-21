@@ -14,14 +14,14 @@ and the boundary is for the arbitrary config a caller hands over
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx.addressing import (
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     Resolved,
     resolve_colorspaces,
     resolve_display_view,
 )
-from ocio2onnx.compiler import compile_processor, op_names, unsupported_ops
-from ocio2onnx.emitters import REGISTRY, UnsupportedOpError, op_label, supported_ops
+from ocio_codegen.compiler import compile_processor, op_names, unsupported_ops
+from ocio_codegen.emitters import REGISTRY, UnsupportedOpError, op_label, supported_ops
 
 #: The pair the compiler emits.
 PAIR = ("Log3G10 REDWideGamutRGB", "ACES2065-1")

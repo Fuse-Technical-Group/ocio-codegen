@@ -17,8 +17,8 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import cuda
-from ocio2onnx.addressing import (
+from ocio_codegen import cuda
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     OPTIMIZATION_FLAGS,
     Resolved,
@@ -355,7 +355,7 @@ class TestKernel:
         """The half kernel is the same arithmetic behind quantized edges, so
         it agrees with the float kernel to half precision, not to the oracle
         tolerance (§spec:cuda-kernel)."""
-        from ocio2onnx.oracle import lattice
+        from ocio_codegen.oracle import lattice
 
         samples = lattice(aces2_sdr.processor)
         f32 = cuda.run_kernel(source, samples)

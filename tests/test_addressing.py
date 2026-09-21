@@ -7,8 +7,8 @@ import re
 import PyOpenColorIO as OCIO
 import pytest
 
-import ocio2onnx
-from ocio2onnx.addressing import (
+import ocio_codegen
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     AddressError,
     enumerate_transforms,
@@ -17,7 +17,7 @@ from ocio2onnx.addressing import (
     resolve_colorspaces,
     resolve_display_view,
 )
-from ocio2onnx.compiler import op_names
+from ocio_codegen.compiler import op_names
 
 PINNED_NAME = "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
 DISPLAY = "sRGB - Display"
@@ -136,6 +136,9 @@ def test_metadata_records_both_the_resolved_name_and_the_uri(config, config_uri)
         config, "Log3G10 REDWideGamutRGB", "ACES2065-1", uri=config_uri
     )
     metadata = resolved.metadata
+    # The literal, not METADATA_PREFIX: the prefix is a frozen artifact
+    # format that outlived the package's rename (§spec:emitted-graph),
+    # and a test restating the constant would ratify a change to it.
     assert all(key.startswith("ocio2onnx.") for key in metadata)
     assert all(isinstance(value, str) for value in metadata.values())
     values = set(metadata.values())
@@ -143,7 +146,7 @@ def test_metadata_records_both_the_resolved_name_and_the_uri(config, config_uri)
     assert config_uri in values
     assert resolved.endpoints in values
     assert OCIO.GetVersion() in values
-    assert ocio2onnx.__version__ in values
+    assert ocio_codegen.__version__ in values
 
 
 def test_metadata_never_says_ocio_default(config, config_uri):

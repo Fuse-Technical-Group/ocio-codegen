@@ -16,10 +16,10 @@ import math
 import numpy as np
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import resolve_colorspaces
-from ocio2onnx.builder import CHANNELS
-from ocio2onnx.oracle import lattice, run_graph, verify
+from ocio_codegen import emitters
+from ocio_codegen.addressing import resolve_colorspaces
+from ocio_codegen.builder import CHANNELS
+from ocio_codegen.oracle import lattice, run_graph, verify
 
 #: A curve whose linear slope the config leaves unset, and one it declares.
 DERIVED = "Log3G10 REDWideGamutRGB"

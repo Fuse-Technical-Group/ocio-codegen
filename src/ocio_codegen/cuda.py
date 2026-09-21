@@ -24,10 +24,10 @@ import re
 import numpy as np
 import PyOpenColorIO as OCIO
 
-from ocio2onnx.addressing import OPTIMIZATION_FLAGS, Resolved
-from ocio2onnx.builder import CHANNELS
-from ocio2onnx.emitters import UnsupportedOpError
-from ocio2onnx.oracle import Comparison, Tolerance, compare, cpu_reference, lattice
+from ocio_codegen.addressing import OPTIMIZATION_FLAGS, Resolved
+from ocio_codegen.builder import CHANNELS
+from ocio_codegen.emitters import UnsupportedOpError
+from ocio_codegen.oracle import Comparison, Tolerance, compare, cpu_reference, lattice
 
 __all__ = [
     "GPU_TOLERANCE",
@@ -446,7 +446,9 @@ def compile_ptx(source: str, arch: str | None = None) -> bytes:
     """
     from cuda.bindings import nvrtc
 
-    err, program = nvrtc.nvrtcCreateProgram(source.encode(), b"ocio2onnx.cu", 0, [], [])
+    err, program = nvrtc.nvrtcCreateProgram(
+        source.encode(), b"ocio_codegen.cu", 0, [], []
+    )
     if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
         raise RuntimeError(f"NVRTC: {err}")
     options = [

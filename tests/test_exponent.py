@@ -10,10 +10,10 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import resolve_colorspaces
-from ocio2onnx.compiler import UnsupportedOpError
-from ocio2onnx.oracle import lattice, run_graph, verify
+from ocio_codegen import emitters
+from ocio_codegen.addressing import resolve_colorspaces
+from ocio_codegen.compiler import UnsupportedOpError
+from ocio_codegen.oracle import lattice, run_graph, verify
 
 #: One closed-form transform per (direction, negative style) the config
 #: carries. Forward reaches the reference; inverse leaves it.

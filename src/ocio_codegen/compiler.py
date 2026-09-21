@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import onnx
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import Resolved
-from ocio2onnx.builder import INPUT, GraphBuilder
-from ocio2onnx.emitters import UnsupportedOpError
+from ocio_codegen import emitters
+from ocio_codegen.addressing import Resolved
+from ocio_codegen.builder import INPUT, GraphBuilder
+from ocio_codegen.emitters import UnsupportedOpError
 
 #: Re-exported: an emitter refuses a parameter it has no path for, and the
 #: refusal a caller catches is the same one whichever raised it.

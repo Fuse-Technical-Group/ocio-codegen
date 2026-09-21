@@ -14,7 +14,7 @@ from typing import Any
 
 import PyOpenColorIO as OCIO
 
-from ocio2onnx import __version__
+from ocio_codegen import __version__
 
 #: The config the specification's numbers were measured against. Versioned
 #: deliberately: ``ocio://default`` moves between releases, so an artifact
@@ -29,6 +29,10 @@ FLOATING_CONFIG = "ocio://default"
 FALLBACK_REFERENCE = "ACES2065-1"
 
 #: Namespace for the keys stamped onto an emitted model's ``metadata_props``.
+#: It keeps the package's former name deliberately. The prefix is an artifact
+#: format, not an import: a consumer reads these keys off a stored model,
+#: so renaming it would make every model emitted before the rename
+#: unreadable. It changes only with a format version.
 METADATA_PREFIX = "ocio2onnx."
 
 #: What OCIO raises when it refuses. ``ExceptionMissingFile`` does **not**

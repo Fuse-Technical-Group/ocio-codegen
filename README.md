@@ -1,4 +1,4 @@
-# ocio2onnx
+# ocio-codegen
 
 > [SPEC.md](SPEC.md) (system specification)
 > | [ROADMAP.md](ROADMAP.md) (planned work)
@@ -14,7 +14,7 @@ Each one needs a graphics context.
 A CUDA-resident real-time video pipeline has no graphics context. Today it
 has to choose between an OpenGL interop round trip on every frame, a baked
 LUT that cannot carry a live parameter, or reimplementing vendor curves by
-hand. `ocio2onnx` compiles the transform instead, to a portable graph that
+hand. `ocio-codegen` compiles the transform instead, to a portable graph that
 runs under ONNX Runtime, TensorRT, or anything else that reads ONNX — with
 no graphics context, and no OCIO dependency at execution time.
 
@@ -78,7 +78,7 @@ blocks you, not the kind of transform it belongs to.
 Reproduce the split for a config of your choice:
 
 ```sh
-ocio2onnx census [--config URI]
+ocio-codegen census [--config URI]
 ```
 
 ## Usage
@@ -87,10 +87,10 @@ Compile a color space pair or a display view. `--verify` holds the graph
 against OCIO's CPU processor before writing it:
 
 ```sh
-ocio2onnx compile --from "Log3G10 REDWideGamutRGB" --to ACES2065-1 -o graph.onnx --verify
-ocio2onnx compile --display "sRGB - Display" --view "Un-tone-mapped" -o srgb.onnx
-ocio2onnx compile --display "Rec.2100-HLG - Display" --view "Video (colorimetric)" -o hlg.onnx
-ocio2onnx compile --display "sRGB - Display" --view "ACES 2.0 - SDR 100 nits (Rec.709)" -o aces.onnx
+ocio-codegen compile --from "Log3G10 REDWideGamutRGB" --to ACES2065-1 -o graph.onnx --verify
+ocio-codegen compile --display "sRGB - Display" --view "Un-tone-mapped" -o srgb.onnx
+ocio-codegen compile --display "Rec.2100-HLG - Display" --view "Video (colorimetric)" -o hlg.onnx
+ocio-codegen compile --display "sRGB - Display" --view "ACES 2.0 - SDR 100 nits (Rec.709)" -o aces.onnx
 ```
 
 `--cuda` writes a second artifact beside the graph: the same transform as
@@ -106,7 +106,7 @@ needs a CUDA device and the `cuda` extra. Across the pinned config, 119 of
 carry a 1D LUT the transpiler refuses, and the graph serves them:
 
 ```sh
-ocio2onnx compile --display "sRGB - Display" --view "ACES 2.0 - SDR 100 nits (Rec.709)" \
+ocio-codegen compile --display "sRGB - Display" --view "ACES 2.0 - SDR 100 nits (Rec.709)" \
     -o aces.onnx --cuda aces.cu --verify
 ```
 
@@ -122,7 +122,7 @@ The same two entry points from Python:
 ```python
 import onnx
 
-from ocio2onnx import compile_colorspaces, compile_display_view
+from ocio_codegen import compile_colorspaces, compile_display_view
 
 onnx.save(compile_colorspaces("Log3G10 REDWideGamutRGB", "ACES2065-1"), "graph.onnx")
 model = compile_display_view("sRGB - Display", "Un-tone-mapped", src="ACEScg")
@@ -160,7 +160,7 @@ From Python, `parameters(model)` answers the same question off the artifact,
 and any runtime binds them the way it binds the image:
 
 ```python
-from ocio2onnx import compile_colorspaces, parameters
+from ocio_codegen import compile_colorspaces, parameters
 
 model = compile_colorspaces("ref", "graded", config="grade.ocio")
 parameters(model)  # {"EXPOSURE": array([0.5], dtype=float32), ...}
@@ -203,7 +203,7 @@ not against `-inf`, and a graph with no finite sample to compare does not
 verify at all.
 
 ```sh
-ocio2onnx verify [--config URI]
+ocio-codegen verify [--config URI]
 ```
 
 Against the pinned ACES Studio config: **159 verified, 0 refused, 0

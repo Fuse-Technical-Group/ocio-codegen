@@ -21,10 +21,10 @@ import numpy as np
 import onnx
 import PyOpenColorIO as OCIO
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import OPTIMIZATION_FLAGS, Resolved
-from ocio2onnx.builder import CHANNELS, INPUT
-from ocio2onnx.compiler import compile_processor
+from ocio_codegen import emitters
+from ocio_codegen.addressing import OPTIMIZATION_FLAGS, Resolved
+from ocio_codegen.builder import CHANNELS, INPUT
+from ocio_codegen.compiler import compile_processor
 
 #: Re-exported: the reference is OCIO's CPU processor at the same optimization
 #: level the compiler read its op list at, and reading them from one place is
