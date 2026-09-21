@@ -15,8 +15,8 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.oracle import cpu_reference, run_graph
+from ocio_codegen import emitters
+from ocio_codegen.oracle import cpu_reference, run_graph
 
 BASES = (2.0, math.e, 10.0)
 

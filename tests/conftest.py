@@ -9,17 +9,17 @@ the processor changes.
 import numpy as np
 import pytest
 
-from ocio2onnx.addressing import (
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     OPTIMIZATION_FLAGS,
     Resolved,
     enumerate_transforms,
     load_config,
 )
-from ocio2onnx.builder import CHANNELS
-from ocio2onnx.compiler import compile_processor
-from ocio2onnx.emitters import op_label
-from ocio2onnx.oracle import compare, cpu_reference, lattice, run_graph
+from ocio_codegen.builder import CHANNELS
+from ocio_codegen.compiler import compile_processor
+from ocio_codegen.emitters import op_label
+from ocio_codegen.oracle import compare, cpu_reference, lattice, run_graph
 
 
 @pytest.fixture(scope="session")

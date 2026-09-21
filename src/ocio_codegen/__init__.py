@@ -22,15 +22,15 @@ __version__ = "0.1.0"
 
 from typing import TYPE_CHECKING, Any
 
-from ocio2onnx.addressing import (
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     AddressError,
     load_config,
     resolve_colorspaces,
     resolve_display_view,
 )
-from ocio2onnx.builder import parameters
-from ocio2onnx.compiler import UnsupportedOpError, compile_processor
+from ocio_codegen.builder import parameters
+from ocio_codegen.compiler import UnsupportedOpError, compile_processor
 
 if TYPE_CHECKING:
     import onnx
@@ -87,7 +87,7 @@ def __getattr__(name: str) -> Any:
     this module does not require it.
     """
     if name == "verify":
-        from ocio2onnx.oracle import verify
+        from ocio_codegen.oracle import verify
 
         return verify
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

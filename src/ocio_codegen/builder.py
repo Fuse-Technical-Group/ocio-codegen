@@ -15,7 +15,7 @@ import numpy as np
 import onnx
 from onnx import TensorProto, helper, numpy_helper
 
-from ocio2onnx.addressing import METADATA_PREFIX
+from ocio_codegen.addressing import METADATA_PREFIX
 
 #: The emitted graph carries three channels; alpha bypasses it rather than
 #: flowing through identity arithmetic (§spec:emitted-graph).

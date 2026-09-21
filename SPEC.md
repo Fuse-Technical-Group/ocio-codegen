@@ -1,4 +1,4 @@
-# ocio2onnx — System Specification
+# ocio-codegen — System Specification
 
 ## Problem statement §spec:problem-statement
 *Status: complete*
@@ -22,7 +22,7 @@ pipeline has three options today, all bad:
 - **Reimplement the math** — unbounded work against per-vendor curves,
   and unverifiable against the reference.
 
-`ocio2onnx` compiles an OCIO transform into an ONNX graph. The graph runs
+`ocio-codegen` compiles an OCIO transform into an ONNX graph. The graph runs
 wherever ONNX runs — ONNX Runtime, TensorRT, or a consumer's own executor
 — with no graphics context, and with no OCIO dependency at execution
 time. OCIO remains the authority for what a transform *is*; this project
@@ -35,6 +35,14 @@ A single ONNX graph per transform: a channels-first float image tensor in,
 the same shape out, with spatial dimensions free so one graph serves every
 resolution. Dynamic properties become additional graph inputs
 (§spec:dynamic-properties).
+
+Every emitted model carries metadata keys under the `ocio2onnx.` prefix: the
+resolved config name, the config URI, the endpoints, and the OCIO version. A
+consumer reads them to identify what an artifact was compiled from, and a
+consumer may read them off a model stored long before it runs. The
+prefix is an artifact format rather than the package name, and keeps the
+project's former name for that reason. It shall change only with a format
+version, so a model emitted before a rename stays readable.
 
 The tensor carries three channels. No transform in the pinned config
 touches alpha — every matrix carries an identity alpha row, every exponent
@@ -162,7 +170,7 @@ compiles, so the boundary is not visible from inside it. It is still stated
 as an op set rather than as a category, because that is what makes it
 predictable for the arbitrary config a caller hands over
 (§spec:problem-statement): the answer names the op that blocks them, and
-nothing is refused for the kind of transform it is. `ocio2onnx census`
+nothing is refused for the kind of transform it is. `ocio-codegen census`
 reports the split for any config against the op set the compiler actually
 implements rather than a second list beside it; `tools/census.py` is a shim
 over the same code.

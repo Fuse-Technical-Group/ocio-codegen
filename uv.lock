@@ -405,7 +405,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ocio2onnx"
+name = "ocio-codegen"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -437,7 +437,7 @@ requires-dist = [
     { name = "cuda-python", marker = "extra == 'cuda'", specifier = ">=13" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "nvidia-cuda-nvrtc", marker = "extra == 'cuda'", specifier = ">=13" },
-    { name = "ocio2onnx", extras = ["cuda"], marker = "sys_platform != 'darwin' and extra == 'dev'" },
+    { name = "ocio-codegen", extras = ["cuda"], marker = "sys_platform != 'darwin' and extra == 'dev'" },
     { name = "onnx", specifier = ">=1.17" },
     { name = "onnxruntime", marker = "extra == 'verify'", specifier = ">=1.19" },
     { name = "opencolorio", specifier = ">=2.5,<3" },

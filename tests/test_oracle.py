@@ -13,10 +13,10 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import resolve_colorspaces
-from ocio2onnx.builder import CHANNELS
-from ocio2onnx.oracle import (
+from ocio_codegen import emitters
+from ocio_codegen.addressing import resolve_colorspaces
+from ocio_codegen.builder import CHANNELS
+from ocio_codegen.oracle import (
     OPTIMIZATION_FLAGS,
     TOLERANCE,
     compare,

@@ -20,8 +20,8 @@ from collections.abc import Sequence
 
 import onnx
 
-from ocio2onnx import __version__, census
-from ocio2onnx.addressing import (
+from ocio_codegen import __version__, census
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     AddressError,
     Resolved,
@@ -31,9 +31,9 @@ from ocio2onnx.addressing import (
     resolve_colorspaces,
     resolve_display_view,
 )
-from ocio2onnx.builder import parameters
-from ocio2onnx.compiler import compile_processor, unsupported_ops
-from ocio2onnx.emitters import UnsupportedOpError
+from ocio_codegen.builder import parameters
+from ocio_codegen.compiler import compile_processor, unsupported_ops
+from ocio_codegen.emitters import UnsupportedOpError
 
 #: Exit codes. The two refusals are distinct because they call for different
 #: responses: one is a typo, the other is a workstream.
@@ -63,7 +63,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     """The whole command surface."""
     parser = argparse.ArgumentParser(
-        prog="ocio2onnx",
+        prog="ocio_codegen",
         description="Compile an OpenColorIO transform into an ONNX graph.",
     )
     parser.add_argument("--version", action="version", version=__version__)
@@ -173,14 +173,14 @@ def _compile(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     # transpiler refuses leaves both paths unwritten (§spec:cuda-kernel).
     source = None
     if args.cuda:
-        from ocio2onnx import cuda
+        from ocio_codegen import cuda
 
         source = cuda.kernel_source(resolved)
 
     if args.verify:
         # The oracle executes a graph, which needs a runtime; compiling does
         # not, so the import stays inside the branch that uses it.
-        from ocio2onnx.oracle import verify
+        from ocio_codegen.oracle import verify
 
         result = verify(resolved, model)
         print(f"{'verified' if result.ok else 'FAILED'}: {result}")
@@ -233,7 +233,7 @@ def _verify(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     quietly dropped from the sweep is the one failure the sweep cannot report
     any other way (§spec:verification).
     """
-    from ocio2onnx.oracle import TOLERANCE, verify
+    from ocio_codegen.oracle import TOLERANCE, verify
 
     config = load_config(args.config)
     reference = reference_space(config)

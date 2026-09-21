@@ -11,14 +11,14 @@ import onnx
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import (
+from ocio_codegen import emitters
+from ocio_codegen.addressing import (
     METADATA_PREFIX,
     Resolved,
     enumerate_transforms,
     resolve_colorspaces,
 )
-from ocio2onnx.builder import (
+from ocio_codegen.builder import (
     IMAGE_SHAPE,
     INPUT,
     IR_VERSION,
@@ -27,8 +27,8 @@ from ocio2onnx.builder import (
     PRECISION,
     GraphBuilder,
 )
-from ocio2onnx.compiler import UnsupportedOpError, compile_processor, op_names
-from ocio2onnx.oracle import compare, cpu_reference, lattice, run_graph, verify
+from ocio_codegen.compiler import UnsupportedOpError, compile_processor, op_names
+from ocio_codegen.oracle import compare, cpu_reference, lattice, run_graph, verify
 
 PAIR = ("ACEScg", "ACES2065-1")
 

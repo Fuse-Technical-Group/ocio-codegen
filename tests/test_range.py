@@ -12,9 +12,9 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.compiler import op_names
-from ocio2onnx.oracle import cpu_reference, lattice, run_graph
+from ocio_codegen import emitters
+from ocio_codegen.compiler import op_names
+from ocio_codegen.oracle import cpu_reference, lattice, run_graph
 
 #: Bound sets measured across the pinned config: an identity clamp, the two
 #: halves of ACEScc's asymmetric pair, and a clamp with no upper bound.

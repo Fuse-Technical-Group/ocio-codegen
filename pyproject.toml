@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ocio2onnx"
+name = "ocio-codegen"
 version = "0.1.0"
 description = "Compile an OpenColorIO transform into an ONNX graph."
 readme = "README.md"
@@ -32,13 +32,13 @@ cuda = ["cuda-python>=13", "nvidia-cuda-nvrtc>=13"]
 # The test suite compiles every transpiled kernel with NVRTC, which needs no
 # device, so CPU-only CI carries the cuda extra too (§spec:cuda-kernel).
 # NVIDIA publishes no macOS wheel; there the compile census skips.
-dev = ["ocio2onnx[cuda]; sys_platform != 'darwin'", "pytest>=8", "ruff>=0.6"]
+dev = ["ocio-codegen[cuda]; sys_platform != 'darwin'", "pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-ocio2onnx = "ocio2onnx.cli:main"
+ocio-codegen = "ocio_codegen.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ocio2onnx"]
+packages = ["src/ocio_codegen"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

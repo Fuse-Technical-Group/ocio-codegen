@@ -15,14 +15,14 @@ a PQ or HLG display, one of which is an HLG view carrying both styles
 each pairs a fixed function with a curve OCIO ships as a table.
 
 The sweep is over the 40 alone. The 111 are their own module's subject, and
-`ocio2onnx verify` runs all 159 once in ``test_cli``; a third full sweep would
+`ocio_codegen verify` runs all 159 once in ``test_cli``; a third full sweep would
 buy nothing but runtime.
 """
 
 import pytest
 
-from ocio2onnx.addressing import enumerate_transforms
-from ocio2onnx.compiler import op_names, unsupported_ops
+from ocio_codegen.addressing import enumerate_transforms
+from ocio_codegen.compiler import op_names, unsupported_ops
 
 #: Measured across the pinned config (§spec:op-coverage): the transforms built
 #: from the closed-form ops alone, those carrying a table, and those carrying a
