@@ -25,6 +25,13 @@ dependencies = [
 # The oracle harness executes an emitted graph, which needs a runtime.
 # Compiling does not, so this stays out of the runtime dependency set.
 verify = ["onnxruntime>=1.19"]
+# The same runtime built for CUDA, so a graph runs on the device it ships to.
+# 1.27 is the first release built against CUDA 13, which the cuda extra pins;
+# the cuda and cudnn extras carry the runtime libraries, so the host needs a
+# driver and nothing else. Neither macOS nor Python 3.10 has a build.
+gpu = [
+    "onnxruntime-gpu[cuda,cudnn]>=1.27; sys_platform == 'linux' and python_version >= '3.11'",
+]
 # Compiling and executing the CUDA kernel needs the driver bindings and the
 # NVRTC library. Generating its source does not, so these stay optional the
 # same way the ONNX runtime does (§spec:cuda-kernel).
@@ -36,6 +43,11 @@ dev = ["ocio-codegen[cuda]; sys_platform != 'darwin'", "pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 ocio-codegen = "ocio_codegen.cli:main"
+
+[tool.uv]
+# Both runtimes install the `onnxruntime` module, so one environment holds
+# one of them.
+conflicts = [[{ extra = "verify" }, { extra = "gpu" }]]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ocio_codegen"]

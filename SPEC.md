@@ -352,6 +352,16 @@ Coverage is asserted, not sampled: for every color space pair in the
 pinned config, the compiler either emits a verified graph or refuses with
 a named op. All 159 verify.
 
+**The graph is also held on the device a consumer runs it on.** ONNX
+Runtime's CUDA executor runs the same lattice against the same reference,
+at the kernel's bound (`cuda.GPU_TOLERANCE`), because GPU transcendentals
+are not libm whichever executor issues them. Every node runs on the device
+or the session fails: ONNX Runtime otherwise places a node its provider
+cannot run on the CPU, and agreement would then certify the CPU. TF32 is
+off, because ONNX Runtime enables it by default and it rounds the 1×1
+convolution's inputs to a 10-bit mantissa, which is a consumer's precision
+choice rather than a property of the graph.
+
 ### What counts as evidence §spec:evidence-floor
 
 Every sample is evidence: one is held against the tolerance where both sides

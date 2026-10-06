@@ -1,0 +1,93 @@
+name: gpu
+
+# The device tests: the CUDA kernel executed against the oracle
+# (§spec:cuda-kernel) and the emitted graph on ONNX Runtime's CUDA executor
+# (§spec:verification). The hosted runners in quality.yml have no GPU, so
+# there these tests find no device and skip; here they run.
+#
+# The required name is the summary job at the end, `gpu / device`, as in
+# quality.yml.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# One bench GPU serves every pull request, so a new push cancels the run it
+# supersedes rather than queueing behind a stale commit.
+concurrency:
+  group: gpu-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  device:
+    # The repository is public and the runner is self-hosted, so a pull
+    # request from a fork would run its own code on the bench. Only branches
+    # of this repository reach it; a fork's change runs here after a
+    # maintainer pushes it to a branch or dispatches the workflow.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: bench-gpu-worker
+    timeout-minutes: 30
+    env:
+      # The gpu extra replaces the CPU runtime the verify extra installs; the
+      # two conflict, so this environment carries only the CUDA build.
+      RUN: uv run --locked --python 3.12 --extra gpu --extra dev
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Pinned to an exact release: setup-uv stopped publishing floating
+      # major tags at v8, so `@v9` does not exist and `@v7` would be mutable.
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: GPU identity
+        run: nvidia-smi
+
+      # The probes the tests skip on, asked up front. A runner that reaches
+      # no device would skip every test and pass, so a miss fails here.
+      - name: Device probes
+        run: |
+          $RUN python - <<'EOF'
+          import onnxruntime as ort
+
+          from ocio_codegen import cuda
+          from ocio_codegen.addressing import DEFAULT_CONFIG, load_config, resolve_colorspaces
+          from ocio_codegen.compiler import compile_processor
+          from ocio_codegen.oracle import lattice, run_graph
+
+          print("onnxruntime", ort.__version__, ort.get_available_providers())
+          ort.preload_dlls()
+          print("cuda device", cuda.device_arch())
+
+          # run_graph turns CPU fallback off, so this runs only if the CUDA
+          # executor loads its libraries and claims every node.
+          config = load_config(DEFAULT_CONFIG)
+          resolved = resolve_colorspaces(config, "ACEScg", "ACES2065-1", uri=DEFAULT_CONFIG)
+          run_graph(compile_processor(resolved), lattice(resolved.processor),
+                    provider="CUDAExecutionProvider")
+          print("CUDAExecutionProvider runs a graph")
+          EOF
+
+      - name: Device tests
+        run: $RUN pytest -rs tests/test_cuda.py tests/test_cuda_provider.py
+
+  # Carries the required check name, as quality.yml's summaries do. It runs
+  # whatever the device job concluded, because GitHub counts a skipped
+  # required check as passing. A device job skipped by its own `if:` (a fork's
+  # pull request) counts as success here.
+  gpu-device:
+    name: gpu / device
+    needs: [device]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when the device job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1
