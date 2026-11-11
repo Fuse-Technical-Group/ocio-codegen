@@ -133,6 +133,40 @@ def test_compile_emits_a_cuda_kernel_beside_the_graph(graph, tmp_path):
     assert onnx.load(graph)
 
 
+def test_compile_leads_a_display_view_with_a_live_grade(graph, tmp_path, capsys):
+    """A graded render's graph takes the CDL's four knobs, and its kernel takes
+    the grade as an argument (§spec:graded-render)."""
+    kernel = tmp_path / "kernel.cu"
+    argv = [
+        "compile",
+        "--from",
+        PAIR[0],
+        "--display",
+        ACES_VIEW[0],
+        "--view",
+        ACES_VIEW[1],
+        "--grade",
+        "ASC",
+        "-o",
+        graph,
+        "--cuda",
+        str(kernel),
+    ]
+    assert main(argv) == OK
+    assert "apply_cdl_f32" in kernel.read_text()
+    assert "CDL_SLOPE" in capsys.readouterr().out
+    recorded = {entry.key: entry.value for entry in onnx.load(graph).metadata_props}
+    assert recorded[f"{METADATA_PREFIX}grade"] == "ASC"
+
+
+def test_a_grade_needs_a_display_view(graph, capsys):
+    argv = ["compile", "--from", PAIR[0], "--to", PAIR[1], "--grade", "ASC"]
+    with pytest.raises(SystemExit) as raised:
+        main([*argv, "-o", graph])
+    assert raised.value.code == USAGE
+    assert "--grade" in capsys.readouterr().err
+
+
 def test_an_untranspilable_shader_refuses_the_kernel_and_writes_nothing(
     graph, tmp_path, capsys
 ):

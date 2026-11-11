@@ -18,6 +18,16 @@ the first consumer that needs curve-based grading rather than CDL. Until
 then the compiler refuses them by the same mechanism as any unimplemented
 op (§spec:op-coverage).
 
+### Unclamped graded render §road:unclamped-grade
+
+The `NO_CLAMP` style for a graded render (§spec:graded-render). Blocked on
+the render graph's answer to inputs whose linear overflows float32: it
+answers NaN where OCIO answers zero, on neutral log values above about 8.6
+into the ACES 2.0 SDR render. The ungraded lattice never forms such a triple,
+and an unclamped saturation does. Once the graph agrees there, the identity
+case remains: OCIO removes an unclamped CDL at its identity, so the graph's
+evaluated identity has to round the same way or skip the same way.
+
 ## Packaging §road:packaging
 
 Publish the compiler as an installable package with the oracle harness

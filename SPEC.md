@@ -500,7 +500,8 @@ The transpiler covers the dialect OCIO emits for closed-form transforms
 and nearest-sampled 1D tables, which is the ACES 2.0 family and every
 analytic transform. What falls outside is refused by name before anything
 is emitted, as ops are (§spec:op-coverage): a uniform, which is a dynamic
-property the kernel would bake stale; and an interpolated or
+property the kernel would bake stale (a graded render's CDL is not one: the
+kernel takes it as an argument, §spec:graded-render); and an interpolated or
 multi-dimensional texture, which is a LUT — the graph already carries
 those at full speed, so the refusal names the artifact that serves them.
 
@@ -528,6 +529,45 @@ because divergent indices serialize the constant cache 32-way, at five
 times the kernel's cost; and float literals carry suffixes because one
 unsuffixed literal drops an expression chain to double-precision
 arithmetic.
+
+## Graded render §spec:graded-render
+*Status: complete*
+
+A camera's look travels beside its pictures as an ASC CDL that changes while
+the camera rolls, and the consumer applies it in the camera's log encoding
+ahead of the display render. A render request may therefore name a grade
+style, and both artifacts shall lead the render with a live CDL in the
+request's source space: the graph as the four inputs §spec:dynamic-properties
+defines, at their identity, and the kernel as one by-value argument.
+
+**The grade is not part of the processor.** OCIO folds a CDL at its identity
+into nothing, or into a `Range` for the clamping style, and bakes any other
+setting into the op. Neither leaves a knob to attach. So the request names the
+style rather than a transform, the resolved processor carries the render
+alone, and the compiler emits the CDL ahead of it through the CDL emitter, so
+the grade's arithmetic is the one §spec:op-emission already verifies.
+
+**The kernel takes the grade by value.** Ten floats — slope, offset, and power
+per channel, then saturation — ride the launch, so a consumer changes the
+grade between frames with nothing to upload and nothing to recompile. The
+graded entry points are named apart from the plain ones (`apply_cdl_f32`,
+`apply_cdl_f16`), so a consumer launching a graded kernel as a plain one fails
+to find the entry rather than reading an argument it never passed. Both
+artifacts record the style under the `grade` metadata key.
+
+**Verification holds the artifact across the knob's range.** A graded artifact
+shall agree with OCIO's processor led by the same CDL at the same setting,
+for several settings including the identity, at the tolerance its executor is
+held to (§spec:verification, §spec:cuda-kernel).
+
+**`ASC` is the one style offered.** It holds the graded picture in the unit
+interval, which keeps the render inside its finite range. Unclamped, a
+saturation step forms neutral values past the point where the log curve's
+linear overflows float32, and there the render graph answers NaN where OCIO
+answers zero; at its identity OCIO also removes the unclamped CDL outright,
+while the graph's `luma + 1 * (x - luma)` rounds wherever channels differ by
+orders of magnitude. Both are measured, and the style waits on the first
+(§road:unclamped-grade).
 
 ## Non-goals §spec:non-goals
 *Status: complete*

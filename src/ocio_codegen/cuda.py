@@ -24,15 +24,23 @@ import re
 import numpy as np
 import PyOpenColorIO as OCIO
 
-from ocio_codegen.addressing import OPTIMIZATION_FLAGS, Resolved
+from ocio_codegen.addressing import (
+    GRADE_STYLES,
+    IDENTITY_GRADE,
+    OPTIMIZATION_FLAGS,
+    Grade,
+    Resolved,
+)
 from ocio_codegen.builder import CHANNELS
 from ocio_codegen.emitters import UnsupportedOpError
 from ocio_codegen.oracle import Comparison, Tolerance, compare, cpu_reference, lattice
 
 __all__ = [
     "GPU_TOLERANCE",
+    "GRADED_ENTRY",
     "UnsupportedShaderError",
     "device_arch",
+    "grade_argument",
     "kernel_source",
     "run_kernel",
     "verify",
@@ -318,12 +326,101 @@ extern "C" __global__ void apply_f16(const unsigned short* __restrict__ in,
 """
 
 
+#: A graded render's argument and its arithmetic (§spec:graded-render). The
+#: grade arrives by value — ten floats, slope, offset, and power per channel
+#: then saturation — so a consumer changes it between launches with nothing to
+#: upload. ``@CLAMPS@`` selects the style and ``@LUMA_*@`` the saturation
+#: weights, both read off the CDL emitter's own transform; the order of the
+#: operations is the graph's (``emitters.emit_cdl``).
+_GRADE = r"""
+struct Grade {
+    float slope[3];
+    float offset[3];
+    float power[3];
+    float saturation;
+};
+
+__device__ vec4 grade_cdl(vec4 c, const Grade& g) {
+    const bool clamps = @CLAMPS@;
+    float v[3] = {c.x, c.y, c.z};
+    for (int k = 0; k < 3; ++k) {
+        float y = v[k] * g.slope[k] + g.offset[k];
+        if (clamps) {
+            y = powf(fminf(fmaxf(y, 0.f), 1.f), g.power[k]);
+        } else if (y >= 0.f) {
+            y = powf(y, g.power[k]);
+        }
+        v[k] = y;
+    }
+    float luma = @LUMA_R@ * v[0] + @LUMA_G@ * v[1] + @LUMA_B@ * v[2];
+    for (int k = 0; k < 3; ++k) {
+        float y = luma + g.saturation * (v[k] - luma);
+        v[k] = clamps ? fminf(fmaxf(y, 0.f), 1.f) : y;
+    }
+    return vec4(v[0], v[1], v[2], c.w);
+}
+"""
+
+#: A graded render's entry points. Named apart from the plain ones, so a
+#: consumer launching a graded kernel as a plain one fails to find the entry
+#: rather than running it with its argument missing.
+_GRADED_KERNELS = r"""
+extern "C" __global__ void apply_cdl_f32(const float* __restrict__ in,
+                                         float* __restrict__ out, int n, Grade g) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    vec4 c = @FUNCTION@(grade_cdl(vec4(in[i], in[i + n], in[i + 2 * n], 0.f), g));
+    out[i] = c.x;
+    out[i + n] = c.y;
+    out[i + 2 * n] = c.z;
+}
+
+extern "C" __global__ void apply_cdl_f16(const unsigned short* __restrict__ in,
+                                         unsigned short* __restrict__ out, int n,
+                                         Grade g) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    vec4 c = @FUNCTION@(grade_cdl(vec4(half_to_float(in[i]), half_to_float(in[i + n]),
+                                       half_to_float(in[i + 2 * n]), 0.f), g));
+    out[i] = float_to_half(c.x);
+    out[i + n] = float_to_half(c.y);
+    out[i + 2 * n] = float_to_half(c.z);
+}
+"""
+
+#: The entry point names a graded kernel publishes, by precision.
+GRADED_ENTRY = "apply_cdl_{precision}"
+PLAIN_ENTRY = "apply_{precision}"
+
+
+def _grade_code(style: str) -> str:
+    """The grade's struct and arithmetic for ``style``, with the saturation
+    weights OCIO's own CDL carries rather than ones assumed here."""
+    luma = IDENTITY_GRADE.transform(style).getSatLumaCoefs()
+    code = _GRADE.replace(
+        "@CLAMPS@", "true" if GRADE_STYLES[style] == OCIO.CDL_ASC else "false"
+    )
+    for channel, weight in zip("RGB", luma, strict=True):
+        code = code.replace(f"@LUMA_{channel}@", f"{float(weight)!r}f")
+    return code
+
+
+def grade_argument(grade: Grade) -> np.ndarray:
+    """``grade`` laid out as the kernel's ``Grade`` argument: ten float32s."""
+    return np.array(
+        [*grade.slope, *grade.offset, *grade.power, grade.saturation],
+        dtype=np.float32,
+    )
+
+
 def kernel_source(resolved: Resolved) -> str:
     """One self-contained ``.cu`` for a resolved transform, or a refusal.
 
     The shader is extracted at the same optimization level the oracle runs
     (`addressing.OPTIMIZATION_FLAGS`), so the kernel and the reference
-    disagree only on arithmetic, never on which ops ran.
+    disagree only on arithmetic, never on which ops ran. A graded request
+    leads the shader with the grade, taken as an argument
+    (§spec:graded-render).
     """
     desc = OCIO.GpuShaderDesc.CreateShaderDesc(language=LANGUAGE)
     resolved.processor.getOptimizedGPUProcessor(
@@ -338,8 +435,12 @@ def kernel_source(resolved: Resolved) -> str:
     )
     tables = "".join(_table(texture) for texture in desc.getTextures())
     body = _transpile(desc.getShaderText())
-    kernels = _KERNELS.replace("@FUNCTION@", desc.getFunctionName())
-    return "\n".join([header, _PRELUDE, tables, body, kernels])
+    if resolved.grade is None:
+        kernels = _KERNELS.replace("@FUNCTION@", desc.getFunctionName())
+        return "\n".join([header, _PRELUDE, tables, body, kernels])
+    kernels = _GRADED_KERNELS.replace("@FUNCTION@", desc.getFunctionName())
+    grade = _grade_code(resolved.grade)
+    return "\n".join([header, _PRELUDE, tables, body, grade, kernels])
 
 
 def _refuse_unsupported(desc) -> None:
@@ -467,13 +568,26 @@ def compile_ptx(source: str, arch: str | None = None) -> bytes:
     return ptx
 
 
-def run_kernel(source: str, samples: np.ndarray, precision: str = "f32") -> np.ndarray:
+def run_kernel(
+    source: str,
+    samples: np.ndarray,
+    precision: str = "f32",
+    *,
+    grade: Grade | None = None,
+) -> np.ndarray:
     """Execute a generated kernel over lattice-shaped samples, on device zero.
 
     ``precision`` names the entry point. The half path quantizes the samples
     to float16 on the way in, which is the claim that entry point makes: the
-    same arithmetic behind half-precision edges.
+    same arithmetic behind half-precision edges. A graded kernel runs at
+    ``grade``, which it needs, and a plain one refuses one it cannot take.
     """
+    graded = GRADED_ENTRY.format(precision=precision) in source
+    if graded and grade is None:
+        raise ValueError("a graded kernel needs the grade it runs at")
+    if grade is not None and not graded:
+        raise ValueError("this kernel takes no grade")
+    entry = (GRADED_ENTRY if graded else PLAIN_ENTRY).format(precision=precision)
     from cuda.bindings import driver as cu
 
     shape = np.shape(samples)
@@ -485,7 +599,7 @@ def run_kernel(source: str, samples: np.ndarray, precision: str = "f32") -> np.n
     context = _check(cu.cuDevicePrimaryCtxRetain(_check(cu.cuDeviceGet(0))))
     _check(cu.cuCtxSetCurrent(context))
     module = _check(cu.cuModuleLoadData(ptx))
-    kernel = _check(cu.cuModuleGetFunction(module, f"apply_{precision}".encode()))
+    kernel = _check(cu.cuModuleGetFunction(module, entry.encode()))
 
     d_in = _check(cu.cuMemAlloc(host_in.nbytes))
     d_out = _check(cu.cuMemAlloc(host_in.nbytes))
@@ -496,6 +610,8 @@ def run_kernel(source: str, samples: np.ndarray, precision: str = "f32") -> np.n
             np.array([int(d_out)], dtype=np.uint64),
             np.array([count], dtype=np.int32),
         ]
+        if grade is not None:
+            arguments.append(grade_argument(grade))
         pointers = np.array([a.ctypes.data for a in arguments], dtype=np.uint64)
         _check(
             cu.cuLaunchKernel(
@@ -521,18 +637,32 @@ def run_kernel(source: str, samples: np.ndarray, precision: str = "f32") -> np.n
     return np.reshape(host_out.astype(np.float32), shape)
 
 
-def verify(resolved: Resolved, source: str | None = None) -> Comparison:
+def verify(
+    resolved: Resolved, source: str | None = None, *, grade: Grade | None = None
+) -> Comparison:
     """Hold a kernel against the oracle at `GPU_TOLERANCE`.
 
     The same lattice and the same reference as the graph's verification
     (§spec:verification); only the tolerance differs, for the reason it
     documents. A caller holding the source it is about to write hands it
-    over, so what is verified is the artifact.
+    over, so what is verified is the artifact. A graded request is held at
+    ``grade``, its identity when none is given, against OCIO's processor led by
+    the same CDL (§spec:graded-render).
     """
-    samples = lattice(resolved.processor)
+    reference = resolved.processor
+    if resolved.grade is not None:
+        grade = IDENTITY_GRADE if grade is None else grade
+        reference = resolved.graded(grade)
+    elif grade is not None:
+        raise ValueError(f"{resolved.endpoints!r} carries no grade to bind")
+    samples = lattice(reference)
     return compare(
-        cpu_reference(resolved.processor, samples),
-        run_kernel(kernel_source(resolved) if source is None else source, samples),
+        cpu_reference(reference, samples),
+        run_kernel(
+            kernel_source(resolved) if source is None else source,
+            samples,
+            grade=grade,
+        ),
         samples,
         tolerance=GPU_TOLERANCE,
     )
