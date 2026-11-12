@@ -45,6 +45,7 @@ dev = ["ocio-codegen[cuda]; sys_platform != 'darwin'", "pytest>=8", "ruff>=0.6"]
 ocio-codegen = "ocio_codegen.cli:main"
 
 [tool.uv]
+required-version = ">=0.12"
 # Both runtimes install the `onnxruntime` module, so one environment holds
 # one of them.
 conflicts = [[{ extra = "verify" }, { extra = "gpu" }]]
