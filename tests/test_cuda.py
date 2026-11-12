@@ -302,6 +302,21 @@ class TestCompile:
         assert census == KERNEL_CENSUS
 
 
+#: The ELF magic a cubin opens with: native code for one architecture, which
+#: the driver loads without the JIT that PTX needs.
+ELF_MAGIC = b"\x7fELF"
+
+
+def test_the_verified_kernel_is_native_code(untonemapped):
+    """Execution loads a cubin rather than PTX. The driver JIT-compiles PTX,
+    and a driver older than the NVRTC that emitted it refuses that PTX even
+    within one CUDA major, so verifying through PTX fails on a host whose
+    driver trails the toolkit (§spec:cuda-kernel). NVRTC builds a cubin for
+    a named architecture with no device present."""
+    cubin = cuda.compile_cubin(cuda.kernel_source(untonemapped), "sm_75")
+    assert cubin.startswith(ELF_MAGIC)
+
+
 @pytest.fixture(scope="module")
 def cuda_runtime():
     """Skip where the NVRTC library or a CUDA device is absent, so the
