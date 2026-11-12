@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/Fuse-Technical-Group/ocio-codegen/compare/v0.2.1...v0.3.0) (2026-11-12)
+
+
+### Features
+
+* lead a display render with a live ASC CDL ([b8ff62d](https://github.com/Fuse-Technical-Group/ocio-codegen/commit/b8ff62d966f21d05fe9ce75aa703c5cd64f450bc))
+
 ## [0.2.1](https://github.com/Fuse-Technical-Group/ocio-codegen/compare/v0.2.0...v0.2.1) (2026-11-12)
 
 
