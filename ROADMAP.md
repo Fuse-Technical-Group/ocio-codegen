@@ -7,16 +7,9 @@ means the work is not done.
 ## Live parameters §road:live-parameters
 
 The scalar and per-channel properties compile to graph inputs
-(§spec:dynamic-properties), so a consumer varies a grade per frame without
-recompiling. What is left is the shape those inputs cannot take.
-
-### Curve-shaped grading properties §road:grading-curves
-
-The four `GRADING_*` families, whose parameters are control points rather
-than values (§spec:dynamic-properties). Deferred behind a named trigger:
-the first consumer that needs curve-based grading rather than CDL. Until
-then the compiler refuses them by the same mechanism as any unimplemented
-op (§spec:op-coverage).
+(§spec:dynamic-properties), and a display render can lead with a live CDL
+(§spec:graded-render). What is left is the grade style that render does not
+yet take.
 
 ### Unclamped graded render §road:unclamped-grade
 
