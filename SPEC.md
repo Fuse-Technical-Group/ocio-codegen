@@ -515,6 +515,9 @@ which forms a transform reaches, and a missing overload surfaces only as an
 NVRTC error in whichever transform first reaches it. NVRTC compiles for a
 named architecture without a device, so the suite compiles all 119 kernels
 in CPU-only CI and pins both counts; executing them stays GPU-gated.
+Execution loads a cubin built for the device rather than PTX: the driver
+JIT-compiles PTX, and a driver older than the NVRTC that emitted it refuses
+that PTX even within one CUDA major, while a cubin needs no JIT.
 
 Verification holds the compiled kernel against the same lattice and CPU
 reference as the graph, at its own bound (`cuda.GPU_TOLERANCE`): GPU
