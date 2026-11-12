@@ -22,7 +22,7 @@ import onnx
 import PyOpenColorIO as OCIO
 
 from ocio_codegen import emitters
-from ocio_codegen.addressing import OPTIMIZATION_FLAGS, Resolved
+from ocio_codegen.addressing import IDENTITY_GRADE, OPTIMIZATION_FLAGS, Grade, Resolved
 from ocio_codegen.builder import CHANNELS, INPUT
 from ocio_codegen.compiler import compile_processor
 
@@ -376,15 +376,44 @@ def compare(
     )
 
 
-def verify(resolved: Resolved, model: onnx.ModelProto | None = None) -> Comparison:
+def verify(
+    resolved: Resolved,
+    model: onnx.ModelProto | None = None,
+    *,
+    grade: Grade | None = None,
+) -> Comparison:
     """Hold a graph against the oracle, compiling one if none is given.
 
     A caller holding the model it is about to write hands it over, so what is
     verified is the artifact rather than a second compilation of the request.
+
+    A graded request is held at ``grade``, its identity when none is given: the
+    graph runs with its four live inputs bound to that setting, and the
+    reference is OCIO's processor led by the same CDL (§spec:graded-render).
     """
-    samples = lattice(resolved.processor)
+    reference = resolved.processor
+    bound: dict[str, Any] = {}
+    if resolved.grade is not None:
+        grade = IDENTITY_GRADE if grade is None else grade
+        reference = resolved.graded(grade)
+        bound = grade_parameters(grade)
+    elif grade is not None:
+        raise ValueError(f"{resolved.endpoints!r} carries no grade to bind")
+    samples = lattice(reference)
     return compare(
-        cpu_reference(resolved.processor, samples),
-        run_graph(compile_processor(resolved) if model is None else model, samples),
+        cpu_reference(reference, samples),
+        run_graph(
+            compile_processor(resolved) if model is None else model, samples, bound
+        ),
         samples,
     )
+
+
+def grade_parameters(grade: Grade) -> dict[str, Any]:
+    """A grade as the four graph inputs a graded render declares."""
+    return {
+        emitters.CDL_SLOPE: grade.slope,
+        emitters.CDL_OFFSET: grade.offset,
+        emitters.CDL_POWER: grade.power,
+        emitters.CDL_SATURATION: [grade.saturation],
+    }

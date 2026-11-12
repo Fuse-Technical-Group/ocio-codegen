@@ -7,16 +7,19 @@ means the work is not done.
 ## Live parameters §road:live-parameters
 
 The scalar and per-channel properties compile to graph inputs
-(§spec:dynamic-properties), so a consumer varies a grade per frame without
-recompiling. What is left is the shape those inputs cannot take.
+(§spec:dynamic-properties), and a display render can lead with a live CDL
+(§spec:graded-render). What is left is the grade style that render does not
+yet take.
 
-### Curve-shaped grading properties §road:grading-curves
+### Unclamped graded render §road:unclamped-grade
 
-The four `GRADING_*` families, whose parameters are control points rather
-than values (§spec:dynamic-properties). Deferred behind a named trigger:
-the first consumer that needs curve-based grading rather than CDL. Until
-then the compiler refuses them by the same mechanism as any unimplemented
-op (§spec:op-coverage).
+The `NO_CLAMP` style for a graded render (§spec:graded-render). Blocked on
+the render graph's answer to inputs whose linear overflows float32: it
+answers NaN where OCIO answers zero, on neutral log values above about 8.6
+into the ACES 2.0 SDR render. The ungraded lattice never forms such a triple,
+and an unclamped saturation does. Once the graph agrees there, the identity
+case remains: OCIO removes an unclamped CDL at its identity, so the graph's
+evaluated identity has to round the same way or skip the same way.
 
 ## Packaging §road:packaging
 

@@ -83,18 +83,62 @@ OPTIMIZATION_FLAGS = OCIO.OptimizationFlags(
 )
 
 
+#: The ASC CDL styles a graded render may lead with (§spec:graded-render), by
+#: the name a request spells and the OCIO style it selects. ``ASC`` alone: the
+#: unclamped style hands the render values past its finite range, where the
+#: graph and OCIO part company (§road:unclamped-grade).
+GRADE_STYLES = {"ASC": OCIO.CDL_ASC}
+
+#: Where a graded artifact records the style of the grade it leads with. A
+#: consumer reads it to know the artifact takes a grade at all.
+GRADE_KEY = f"{METADATA_PREFIX}grade"
+
+
 class AddressError(ValueError):
     """A compile request that the loaded config cannot resolve."""
 
 
 @dataclasses.dataclass(frozen=True)
+class Grade:
+    """One setting of a live ASC CDL: the ten numbers a colourist turns.
+
+    The identity is the default, so ``Grade()`` is the grade nobody has touched.
+    """
+
+    slope: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    power: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    saturation: float = 1.0
+
+    def transform(self, style: str) -> OCIO.CDLTransform:
+        """The OCIO transform for this setting, in ``style``."""
+        transform = OCIO.CDLTransform()
+        transform.setStyle(GRADE_STYLES[style])
+        transform.setSlope(list(self.slope))
+        transform.setOffset(list(self.offset))
+        transform.setPower(list(self.power))
+        transform.setSat(self.saturation)
+        return transform
+
+
+#: The grade an artifact's live parameters default to.
+IDENTITY_GRADE = Grade()
+
+
+@dataclasses.dataclass(frozen=True)
 class Resolved:
-    """A compile request bound to a processor, with its provenance."""
+    """A compile request bound to a processor, with its provenance.
+
+    ``grade`` names the style of a live CDL leading the processor, or ``None``
+    for a request with no grade (§spec:graded-render). The processor itself
+    never carries that CDL: the artifact leads with it as live parameters.
+    """
 
     processor: OCIO.Processor
     config_name: str
     config_uri: str
     endpoints: str
+    grade: str | None = None
 
     @property
     def metadata(self) -> dict[str, str]:
@@ -104,13 +148,37 @@ class Resolved:
         an artifact says which database produced it rather than which alias
         was used to reach it.
         """
-        return {
+        metadata = {
             f"{METADATA_PREFIX}version": __version__,
             f"{METADATA_PREFIX}ocio.version": OCIO.GetVersion(),
             f"{METADATA_PREFIX}config.name": self.config_name,
             f"{METADATA_PREFIX}config.uri": self.config_uri,
             f"{METADATA_PREFIX}endpoints": self.endpoints,
         }
+        if self.grade is not None:
+            metadata[GRADE_KEY] = self.grade
+        return metadata
+
+    def graded(self, grade: Grade) -> OCIO.Processor:
+        """The processor led by ``grade`` in this request's style: what a graded
+        artifact computes at that setting, and so what it is verified against.
+
+        Built from the resolved op list rather than from the config, which the
+        list already answers for. Optimized at `OPTIMIZATION_FLAGS` like every
+        processor this module hands out, so a grade at its identity reduces the
+        way OCIO's own renderer reduces it.
+        """
+        if self.grade is None:
+            raise ValueError(f"{self.endpoints!r} carries no grade")
+        group = OCIO.GroupTransform()
+        group.appendTransform(grade.transform(self.grade))
+        for transform in self.processor.createGroupTransform():
+            group.appendTransform(transform)
+        return (
+            OCIO.Config.CreateRaw()
+            .getProcessor(group)
+            .getOptimizedProcessor(OPTIMIZATION_FLAGS)
+        )
 
 
 def load_config(uri: str = DEFAULT_CONFIG) -> OCIO.Config:
@@ -165,11 +233,19 @@ def resolve_display_view(
     *,
     src: str | None = None,
     uri: str,
+    grade: str | None = None,
 ) -> Resolved:
     """Resolve a display and view to a processor.
 
-    ``src`` defaults to the config's reference space.
+    ``src`` defaults to the config's reference space. ``grade`` names a style
+    in `GRADE_STYLES` for a render led by a live ASC CDL in ``src``
+    (§spec:graded-render), or ``None`` for none.
     """
+    if grade is not None and grade not in GRADE_STYLES:
+        raise AddressError(
+            f"grade style {grade!r} has no path in this compiler; "
+            f"name one of {', '.join(sorted(GRADE_STYLES))}"
+        )
     src = src if src is not None else reference_space(config)
     _require_colorspace(config, src, uri=uri, role="source")
 
@@ -191,6 +267,7 @@ def resolve_display_view(
         config_name=config.getName(),
         config_uri=uri,
         endpoints=f"{src} -> {display} / {view}",
+        grade=grade,
     )
 
 

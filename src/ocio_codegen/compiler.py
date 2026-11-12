@@ -12,7 +12,7 @@ from __future__ import annotations
 import onnx
 
 from ocio_codegen import emitters
-from ocio_codegen.addressing import Resolved
+from ocio_codegen.addressing import IDENTITY_GRADE, Resolved
 from ocio_codegen.builder import INPUT, GraphBuilder
 from ocio_codegen.emitters import UnsupportedOpError
 
@@ -63,6 +63,13 @@ def compile_processor(resolved: Resolved) -> onnx.ModelProto:
 
     builder = GraphBuilder()
     tensor = INPUT
+    if resolved.grade is not None:
+        # The grade leads as live inputs at its identity (§spec:graded-render).
+        # Emitted by the CDL emitter itself, so a graded render's knobs are
+        # the same four a bare CDL's are, with the same arithmetic.
+        tensor = emitters.REGISTRY["CDL"].emit(
+            builder, IDENTITY_GRADE.transform(resolved.grade), tensor
+        )
     for transform in resolved.processor.createGroupTransform():
         # Every op has an emitter: the refusal above is what established it,
         # through this same key.
