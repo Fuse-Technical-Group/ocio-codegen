@@ -1,0 +1,4 @@
+# Self-hosted runner labels the workflows target, so actionlint knows them.
+self-hosted-runner:
+  labels:
+    - bench-render

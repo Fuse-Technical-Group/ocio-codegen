@@ -360,7 +360,10 @@ or the session fails: ONNX Runtime otherwise places a node its provider
 cannot run on the CPU, and agreement would then certify the CPU. TF32 is
 off, because ONNX Runtime enables it by default and it rounds the 1×1
 convolution's inputs to a 10-bit mantissa, which is a consumer's precision
-choice rather than a property of the graph.
+choice rather than a property of the graph. The CUDA executor has no `Atan`
+kernel, so the transforms whose graphs carry one, every ACES 2.0 view, are
+refused there rather than verified; their count is pinned, and every other
+graph agrees on the device (§road:cuda-atan).
 
 ### What counts as evidence §spec:evidence-floor
 

@@ -12,7 +12,8 @@ mantissa, which is a choice a consumer makes about precision, not a property
 of the graph.
 
 The tests skip wherever the CUDA build of ONNX Runtime or a device is absent,
-which is every hosted runner; the bench GPU workflow runs them.
+which is every hosted runner. They run on a developer's GPU, and in the gpu
+workflow when a maintainer asks for it.
 """
 
 import PyOpenColorIO as OCIO
@@ -27,6 +28,14 @@ CUDA_PROVIDER = "CUDAExecutionProvider"
 
 #: Full float32 arithmetic in the convolution, as the CPU executor computes it.
 FP32 = {"use_tf32": "0"}
+
+#: The op the CUDA executor has no kernel for, and the transforms whose graphs
+#: carry it: every ACES 2.0 view, whose hue is an ``atan2``. With CPU fallback
+#: off those sessions are refused (§road:cuda-atan). Pinned, so a release
+#: that adds the kernel, or a graph that reaches it in a new transform, moves
+#: the count rather than passing unnoticed.
+UNPLACED_OP = "Atan"
+UNPLACED_TRANSFORMS = 24
 
 
 def on_device(processor, model, parameters=None):
@@ -62,8 +71,12 @@ def cuda_provider():
 def test_every_graph_agrees_on_the_device(config):
     """The pinned config's 159 transforms, each compiled once and run on the
     GPU. A session the executor refuses is reported by transform, beside the
-    disagreements, so one run names everything that does not hold."""
+    disagreements, so one run names everything that does not hold.
+
+    The refused set is exactly the graphs carrying `UNPLACED_OP`, no more and
+    no fewer, and every other graph runs wholly on the device and agrees."""
     refused = []
+    unplaced = []
     disagreements = []
     for label, processor in enumerate_transforms(config, uri=DEFAULT_CONFIG):
         model = compile_processor(
@@ -74,6 +87,8 @@ def test_every_graph_agrees_on_the_device(config):
                 endpoints=label,
             )
         )
+        if any(node.op_type == UNPLACED_OP for node in model.graph.node):
+            unplaced.append(label)
         try:
             result = on_device(processor, model)
         except Exception as exc:  # ONNX Runtime raises its own unexported types
@@ -81,7 +96,9 @@ def test_every_graph_agrees_on_the_device(config):
             continue
         if not result.ok:
             disagreements.append((label, str(result)))
-    assert refused == []
+    assert len(unplaced) == UNPLACED_TRANSFORMS
+    assert [label for label, _ in refused] == unplaced
+    assert all("fallback to CPU EP" in reason for _, reason in refused)
     assert disagreements == []
 
 

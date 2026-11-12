@@ -5,10 +5,18 @@ name: gpu
 # (§spec:verification). The hosted runners in quality.yml have no GPU, so
 # there these tests find no device and skip; here they run.
 #
-# The required name is the summary job at the end, `gpu / device`, as in
-# quality.yml.
+# A maintainer asks for a run: by dispatch, or by labelling a pull request
+# `gpu`, which only someone with triage rights can do. The repository is
+# public, so the label is the trust boundary for a self-hosted runner, and a
+# pull request nobody labelled queues nothing. The runner group serving the
+# bench admits this repository before the job has a runner to land on; until
+# then a requested run waits and is cancelled.
+#
+# The summary job at the end, `gpu / device`, carries the check name, as in
+# quality.yml. It is not a required check.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 # One bench GPU serves every pull request, so a new push cancels the run it
@@ -26,8 +34,11 @@ jobs:
     # request from a fork would run its own code on the bench. Only branches
     # of this repository reach it; a fork's change runs here after a
     # maintainer pushes it to a branch or dispatches the workflow.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: bench-gpu-worker
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'gpu'))
+    runs-on: bench-render
     timeout-minutes: 30
     env:
       # The gpu extra replaces the CPU runtime the verify extra installs; the
