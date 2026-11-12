@@ -73,6 +73,10 @@ class Tolerance:
 
 TOLERANCE = Tolerance(absolute=2e-5, relative=1e-4)
 
+#: The ONNX Runtime execution provider a graph runs on unless the caller
+#: names another.
+CPU_PROVIDER = "CPUExecutionProvider"
+
 
 @dataclasses.dataclass(frozen=True)
 class Worst:
@@ -246,6 +250,9 @@ def run_graph(
     model: onnx.ModelProto,
     samples: np.ndarray,
     parameters: Mapping[str, Any] | None = None,
+    *,
+    provider: str = CPU_PROVIDER,
+    provider_options: Mapping[str, str] | None = None,
 ) -> np.ndarray:
     """Execute an emitted graph over ``samples``.
 
@@ -258,6 +265,11 @@ def run_graph(
     from another, and at a matching shape that reports agreement — a graph
     certified on evidence it never produced, which is the one failure this
     module exists to prevent (§spec:verification).
+
+    ``provider`` names the ONNX Runtime executor, and it runs every node or
+    the session fails. ONNX Runtime otherwise places a node the provider
+    cannot run on the CPU, and a graph that agrees is then evidence about the
+    CPU under the accelerator's name.
     """
     # Executing a graph is the one thing here that needs the runtime; a
     # caller verifying a different executor (`cuda.verify`) compares against
@@ -268,8 +280,13 @@ def run_graph(
     if INPUT in bound:
         raise ValueError(f"{INPUT!r} is the image, not a live parameter")
 
+    options = ort.SessionOptions()
+    if provider != CPU_PROVIDER:
+        options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     session = ort.InferenceSession(
-        model.SerializeToString(), providers=["CPUExecutionProvider"]
+        model.SerializeToString(),
+        options,
+        providers=[(provider, dict(provider_options or {}))],
     )
     inputs = {
         name: np.asarray(value, dtype=np.float32) for name, value in bound.items()

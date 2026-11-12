@@ -22,6 +22,7 @@ from ocio_codegen.oracle import (
     compare,
     cpu_reference,
     lattice,
+    run_graph,
 )
 
 EXTREMES = [-65504.0, -100.0, 100.0, 1000.0, 65504.0]
@@ -287,6 +288,31 @@ def test_cpu_reference_preserves_shape_and_precision(config, config_uri):
     want = cpu_reference(resolved.processor, samples)
     assert want.shape == samples.shape
     assert want.dtype == np.float32
+
+
+def test_a_named_provider_runs_the_graph_on_the_cpu_too(config, compile_bare):
+    """The default provider and an explicit one answer alike, so naming a
+    provider changes where the graph runs and nothing else."""
+    processor = config.getProcessor("ACEScg", "ACES2065-1")
+    model = compile_bare(processor)
+    samples = lattice(processor)
+    assert np.array_equal(
+        run_graph(model, samples),
+        run_graph(model, samples, provider="CPUExecutionProvider"),
+    )
+
+
+def test_a_provider_that_cannot_place_the_graph_fails_rather_than_falls_back(
+    config, compile_bare
+):
+    """A node the named provider cannot place would otherwise run on the CPU,
+    and the run would certify the CPU under the accelerator's name. No build
+    of the runtime the suite installs carries DirectML."""
+    processor = config.getProcessor("ACEScg", "ACES2065-1")
+    with pytest.raises(Exception, match="fallback"):
+        run_graph(
+            compile_bare(processor), lattice(processor), provider="DmlExecutionProvider"
+        )
 
 
 def test_cpu_reference_does_not_mutate_its_input(config):

@@ -41,3 +41,32 @@ Emit the op census and the verify/refuse partition as a generated artifact
 per OCIO release, so a consumer reads what is supported from measurement
 rather than from prose (§spec:op-coverage, §spec:verification). This is
 also how an OCIO upgrade surfaces a new op: the partition changes.
+
+## CUDA executor coverage §road:cuda-executor
+
+Hold every emitted graph on ONNX Runtime's CUDA executor with CPU fallback
+off (§spec:verification). All but the ACES 2.0 views run there now.
+
+### Atan on the CUDA executor §road:cuda-atan
+
+The 24 ACES 2.0 view graphs each carry one `Atan`, the hue angle, and the
+CUDA executor has no kernel for it, so those sessions are refused. Emit the
+angle from ops the executor places, held to the oracle at the graph's own
+tolerance, or take an ONNX Runtime release that adds the kernel; either way
+the pinned refusal count in `tests/test_cuda_provider.py` falls to zero.
+
+## Apple GPU execution §road:apple-gpu
+
+Hold the emitted graph on an Apple GPU the way §spec:verification holds it
+on the CUDA executor: every node on the device, the same lattice, the same
+reference. ONNX Runtime's CoreML executor is the path a consumer on that
+hardware takes. With CPU fallback off it accepts none of the pinned
+config's 159 graphs: 140 fail CoreML's ML Program parse at the 1×1
+convolution, 8 at a `Clip`, and 11 carry an op CoreML does not place.
+
+### CoreML acceptance §road:coreml-acceptance
+
+Emit the convolution and the clamp in forms CoreML's ML Program accepts, or
+refuse by name where none exists, and pin the accepted count as a census
+(§spec:op-coverage, §spec:verification). The test runs on a self-hosted
+Apple Silicon runner, because hosted macOS runners expose no GPU.
