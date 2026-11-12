@@ -6,7 +6,7 @@ import numpy as np
 import onnx
 import pytest
 
-from ocio2onnx.builder import (
+from ocio_codegen.builder import (
     CHANNEL_SHAPE,
     CHANNELS,
     IMAGE_SHAPE,
@@ -17,7 +17,7 @@ from ocio2onnx.builder import (
     GraphBuilder,
     parameters,
 )
-from ocio2onnx.oracle import run_graph
+from ocio_codegen.oracle import run_graph
 
 SAMPLES = np.array([[[[-2.0, 0.5]], [[0.25, 4.0]], [[1.0, -1.0]]]], dtype=np.float32)
 

@@ -3,11 +3,11 @@
 import onnx
 import PyOpenColorIO as OCIO
 
-import ocio2onnx
+import ocio_codegen
 
 
 def test_package_is_installed():
-    assert ocio2onnx.__version__
+    assert ocio_codegen.__version__
 
 
 def test_runtime_dependencies_import():

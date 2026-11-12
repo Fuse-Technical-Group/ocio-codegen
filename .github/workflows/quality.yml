@@ -9,12 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  # Validate governance docs against the symphonize notation contract:
+  # markdownlint, SPEC status lines, slug-suffix heading grammar, and
+  # §-reference resolution. The contract is maintained upstream; pinning
+  # @notation--v0 tracks the pre-1.0 notation major line. It lives here
+  # rather than in its own workflow because a summary job can only depend
+  # on jobs in the same workflow.
+  governance:
+    uses: repentsinner/symphonize/.github/workflows/governance-lint.yml@notation--v0
+    with:
+      # README is a pre-implementation landing page; empty type skips
+      # README heading validation until the library ships a usage surface.
+      readme-type: ""
+
   markdownlint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       # Lint root governance/landing docs (README, SPEC, ROADMAP).
-      # Config: .markdownlint.json + .markdownlint-cli2.jsonc.
+      # Config: .markdownlint-cli2.jsonc.
       - uses: DavidAnson/markdownlint-cli2-action@v24
         with:
           globs: "*.md"
@@ -24,14 +37,58 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Pinned to an exact release: setup-uv stopped publishing floating
-      # major tags at v8, so `@v9` does not exist and `@v7` would be mutable.
-      - uses: astral-sh/setup-uv@v9.0.0
+      # major tags at v8, so `@v10` does not exist and `@v7` would be mutable.
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
+          prune-cache: true
       # Pinned to 3.12: opencolorio publishes no wheel for 3.13+.
       - run: bash tools/ci.sh
 
-  #
-  # SPEC status lines, slug-suffix heading grammar, and §-reference
-  # resolution are validated by the symphonize notation contract in
-  # governance-lint.yml.
+  # The ruleset requires a `shellcheck` check. The file list comes from git
+  # rather than a glob, so an untracked scratch script cannot fail the build
+  # and a script added anywhere is covered without editing this workflow.
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: ShellCheck
+        run: |
+          mapfile -t scripts < <(git ls-files '*.sh' '*.bash')
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "No tracked shell scripts."
+            exit 0
+          fi
+          printf 'checking %s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"
+
+  # Summary jobs carry the required check names. Each runs whatever its
+  # dependencies' outcome, because GitHub counts a skipped required check as
+  # passing.
+  quality-governance:
+    name: quality / governance
+    needs: [governance, markdownlint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a governance job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1
+
+  quality-correctness:
+    name: quality / correctness
+    needs: [python, shellcheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a correctness job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          exit 1

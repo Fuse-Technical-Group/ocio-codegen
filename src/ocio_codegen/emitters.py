@@ -22,9 +22,9 @@ from typing import Any
 
 import numpy as np
 
-from ocio2onnx import aces2
-from ocio2onnx.addressing import OCIO_ERRORS
-from ocio2onnx.builder import CHANNEL_AXIS, CHANNELS, GraphBuilder
+from ocio_codegen import aces2
+from ocio_codegen.addressing import OCIO_ERRORS
+from ocio_codegen.builder import CHANNEL_AXIS, CHANNELS, GraphBuilder
 
 #: A ``Range`` bound OCIO leaves unset arrives as NaN, and ``Clip`` needs a
 #: number. This stands in for "no bound": float16's finite limit is 65504, so

@@ -15,11 +15,11 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import aces2, emitters
-from ocio2onnx.addressing import enumerate_transforms
-from ocio2onnx.compiler import unsupported_ops
-from ocio2onnx.emitters import op_label, supported_ops
-from ocio2onnx.oracle import lattice, run_graph
+from ocio_codegen import aces2, emitters
+from ocio_codegen.addressing import enumerate_transforms
+from ocio_codegen.compiler import unsupported_ops
+from ocio_codegen.emitters import op_label, supported_ops
+from ocio_codegen.oracle import lattice, run_graph
 
 #: How the registry, the census, and a refusal all spell this op.
 ACES = "FixedFunction[ACES_OUTPUT_TRANSFORM_20]"

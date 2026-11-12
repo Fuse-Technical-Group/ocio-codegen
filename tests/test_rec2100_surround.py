@@ -14,16 +14,16 @@ import numpy as np
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.addressing import enumerate_transforms
-from ocio2onnx.compiler import op_names, unsupported_ops
-from ocio2onnx.emitters import (
+from ocio_codegen import emitters
+from ocio_codegen.addressing import enumerate_transforms
+from ocio_codegen.compiler import op_names, unsupported_ops
+from ocio_codegen.emitters import (
     REC2100_LUMA,
     REC2100_MIN_LUM,
     op_label,
     supported_ops,
 )
-from ocio2onnx.oracle import lattice, run_graph
+from ocio_codegen.oracle import lattice, run_graph
 
 #: The two styles that share the ``FixedFunction`` class, as a refusal and the
 #: registry now spell them.

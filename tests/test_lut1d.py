@@ -37,10 +37,10 @@ import PyOpenColorIO as OCIO
 import pytest
 from onnx import numpy_helper
 
-from ocio2onnx import emitters
-from ocio2onnx.builder import INPUT, GraphBuilder
-from ocio2onnx.emitters import UnsupportedOpError
-from ocio2onnx.oracle import TOLERANCE, compare, cpu_reference, lattice, run_graph
+from ocio_codegen import emitters
+from ocio_codegen.builder import INPUT, GraphBuilder
+from ocio_codegen.emitters import UnsupportedOpError
+from ocio_codegen.oracle import TOLERANCE, compare, cpu_reference, lattice, run_graph
 
 LUT1D = "Lut1D"
 REFERENCE = "ACES2065-1"

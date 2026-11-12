@@ -12,10 +12,10 @@ import sys
 
 import pytest
 
-from ocio2onnx import census
-from ocio2onnx.addressing import DEFAULT_CONFIG, enumerate_transforms
-from ocio2onnx.compiler import unsupported_ops
-from ocio2onnx.emitters import supported_ops
+from ocio_codegen import census
+from ocio_codegen.addressing import DEFAULT_CONFIG, enumerate_transforms
+from ocio_codegen.compiler import unsupported_ops
+from ocio_codegen.emitters import supported_ops
 
 #: Measured across the pinned config (§spec:op-coverage). ``FixedFunction``
 #: appears as its two styles, which is what ``op_label`` names.

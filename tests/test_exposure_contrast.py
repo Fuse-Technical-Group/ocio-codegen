@@ -15,10 +15,10 @@ the ``contrast == 1`` short circuit are OCIO's rather than tidied away.
 import PyOpenColorIO as OCIO
 import pytest
 
-from ocio2onnx import emitters
-from ocio2onnx.builder import parameters
-from ocio2onnx.compiler import UnsupportedOpError
-from ocio2onnx.oracle import run_graph
+from ocio_codegen import emitters
+from ocio_codegen.builder import parameters
+from ocio_codegen.compiler import UnsupportedOpError
+from ocio_codegen.oracle import run_graph
 
 EXPOSURE_CONTRAST = "ExposureContrast"
 

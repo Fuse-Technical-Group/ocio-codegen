@@ -23,9 +23,9 @@ import re
 import onnx
 import pytest
 
-from ocio2onnx.addressing import DEFAULT_CONFIG, METADATA_PREFIX
-from ocio2onnx.builder import PRECISION
-from ocio2onnx.cli import (
+from ocio_codegen.addressing import DEFAULT_CONFIG, METADATA_PREFIX
+from ocio_codegen.builder import PRECISION
+from ocio_codegen.cli import (
     CANNOT_RESOLVE,
     FAILED,
     OK,
@@ -68,7 +68,7 @@ def test_the_console_script_points_at_this_entry_point():
     (script,) = [
         entry
         for entry in importlib.metadata.entry_points(group="console_scripts")
-        if entry.name == "ocio2onnx"
+        if entry.name == "ocio-codegen"
     ]
     assert script.load() is main
 
@@ -106,6 +106,59 @@ def test_compile_takes_a_display_view(display, view, graph):
 def test_compile_takes_a_config(graph):
     argv = ["compile", "--from", PAIR[0], "--to", PAIR[1], "-o", graph]
     assert main([*argv, "--config", DEFAULT_CONFIG]) == OK
+
+
+def test_compile_emits_a_cuda_kernel_beside_the_graph(graph, tmp_path):
+    """The kernel is a second artifact of the same request, carrying the same
+    provenance (§spec:cuda-kernel)."""
+    kernel = tmp_path / "kernel.cu"
+    argv = [
+        "compile",
+        "--from",
+        "ACEScg",
+        "--display",
+        ACES_VIEW[0],
+        "--view",
+        ACES_VIEW[1],
+        "-o",
+        graph,
+        "--cuda",
+        str(kernel),
+    ]
+    assert main(argv) == OK
+
+    source = kernel.read_text()
+    assert 'extern "C"' in source
+    assert "apply_f32" in source
+    assert DEFAULT_CONFIG in source
+    assert onnx.load(graph)
+
+
+def test_an_untranspilable_shader_refuses_the_kernel_and_writes_nothing(
+    graph, tmp_path, capsys
+):
+    """The HLG decode publishes an interpolated `Lut1D` texture, which the
+    transpiler refuses by name — and neither artifact lands, so a caller
+    never holds a graph whose requested twin silently failed."""
+    kernel = tmp_path / "kernel.cu"
+    argv = [
+        "compile",
+        "--from",
+        "Rec.2100-HLG - Display",
+        "--to",
+        PAIR[1],
+        "-o",
+        graph,
+        "--cuda",
+        str(kernel),
+    ]
+    assert main(argv) == WILL_NOT_EMIT
+
+    err = capsys.readouterr().err
+    assert "ocio_lut1d" in err
+    assert "Traceback" not in err
+    assert not kernel.exists()
+    assert not (tmp_path / "graph.onnx").exists()
 
 
 def test_a_display_view_carrying_the_aces_output_transform_verifies(graph, capsys):

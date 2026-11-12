@@ -9,13 +9,13 @@ they hand back verifies.
 import onnx
 import pytest
 
-import ocio2onnx
-from ocio2onnx import (
+import ocio_codegen
+from ocio_codegen import (
     AddressError,
     compile_colorspaces,
     compile_display_view,
 )
-from ocio2onnx.addressing import (
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     METADATA_PREFIX,
     Resolved,
@@ -23,9 +23,9 @@ from ocio2onnx.addressing import (
     resolve_colorspaces,
     resolve_display_view,
 )
-from ocio2onnx.builder import PRECISION
-from ocio2onnx.compiler import compile_processor, op_names
-from ocio2onnx.oracle import verify as oracle_verify
+from ocio_codegen.builder import PRECISION
+from ocio_codegen.compiler import compile_processor, op_names
+from ocio_codegen.oracle import verify as oracle_verify
 
 #: The pair §spec:verification names: a camera log
 #: encoding back to the reference.
@@ -44,7 +44,7 @@ def metadata(model):
 
 
 def test_the_package_exports_what_it_says_it_does():
-    assert set(ocio2onnx.__all__) == {
+    assert set(ocio_codegen.__all__) == {
         "AddressError",
         "DEFAULT_CONFIG",
         "UnsupportedOpError",
@@ -54,22 +54,22 @@ def test_the_package_exports_what_it_says_it_does():
         "parameters",
         "verify",
     }
-    for name in ocio2onnx.__all__:
-        assert getattr(ocio2onnx, name) is not None
+    for name in ocio_codegen.__all__:
+        assert getattr(ocio_codegen, name) is not None
 
 
 def test_a_graph_without_a_grade_carries_no_live_parameters():
     """``parameters`` answers off the artifact, so a caller asks what it can
     vary rather than assuming (§spec:dynamic-properties). Nothing in the pinned
     config carries a dynamic property, so this pair's answer is empty."""
-    assert ocio2onnx.parameters(compile_colorspaces(*PAIR)) == {}
+    assert ocio_codegen.parameters(compile_colorspaces(*PAIR)) == {}
 
 
 def test_the_re_exports_are_the_originals():
-    assert ocio2onnx.DEFAULT_CONFIG == DEFAULT_CONFIG
-    assert ocio2onnx.verify is oracle_verify
-    assert issubclass(ocio2onnx.AddressError, ValueError)
-    assert issubclass(ocio2onnx.UnsupportedOpError, NotImplementedError)
+    assert ocio_codegen.DEFAULT_CONFIG == DEFAULT_CONFIG
+    assert ocio_codegen.verify is oracle_verify
+    assert issubclass(ocio_codegen.AddressError, ValueError)
+    assert issubclass(ocio_codegen.UnsupportedOpError, NotImplementedError)
 
 
 def test_compile_colorspaces_returns_a_model_that_verifies(config, check):

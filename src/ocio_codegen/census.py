@@ -17,16 +17,16 @@ reported 28 refusals where the compiler made 48.
 
 It reports the op set, so a transform an emitter refuses for a parameter it
 carries — a hue-adjusted ``Lut1D``, say — counts here as supported. The
-refusal a consumer meets is ``ocio2onnx verify``'s, which compiles.
+refusal a consumer meets is ``ocio_codegen verify``'s, which compiles.
 
 Run it against a new OCIO release to see what changed: a new op type shows up
 as a refusal rather than as silence. This is the measurement the specification
 quotes, not a separate estimate of it.
 
-Reachable as ``ocio2onnx census`` or as ``python tools/census.py``.
+Reachable as ``ocio_codegen census`` or as ``python tools/census.py``.
 
 Note: this reports *coverage*, not correctness. Verifying an emitted graph
-against OCIO's CPU processor is ``ocio2onnx verify`` (§spec:verification).
+against OCIO's CPU processor is ``ocio_codegen verify`` (§spec:verification).
 """
 
 from __future__ import annotations
@@ -37,14 +37,14 @@ from collections.abc import Iterable, Sequence
 
 import PyOpenColorIO as OCIO
 
-from ocio2onnx.addressing import (
+from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
     enumerate_transforms,
     load_config,
     reference_space,
 )
-from ocio2onnx.compiler import op_names, unsupported_ops
-from ocio2onnx.emitters import supported_ops
+from ocio_codegen.compiler import op_names, unsupported_ops
+from ocio_codegen.emitters import supported_ops
 
 #: How many refusals the report lists before summarising the rest.
 LISTED = 10

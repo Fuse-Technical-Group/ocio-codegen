@@ -1,4 +1,4 @@
-# ocio2onnx — System Specification
+# ocio-codegen — System Specification
 
 ## Problem statement §spec:problem-statement
 *Status: complete*
@@ -22,7 +22,7 @@ pipeline has three options today, all bad:
 - **Reimplement the math** — unbounded work against per-vendor curves,
   and unverifiable against the reference.
 
-`ocio2onnx` compiles an OCIO transform into an ONNX graph. The graph runs
+`ocio-codegen` compiles an OCIO transform into an ONNX graph. The graph runs
 wherever ONNX runs — ONNX Runtime, TensorRT, or a consumer's own executor
 — with no graphics context, and with no OCIO dependency at execution
 time. OCIO remains the authority for what a transform *is*; this project
@@ -35,6 +35,14 @@ A single ONNX graph per transform: a channels-first float image tensor in,
 the same shape out, with spatial dimensions free so one graph serves every
 resolution. Dynamic properties become additional graph inputs
 (§spec:dynamic-properties).
+
+Every emitted model carries metadata keys under the `ocio2onnx.` prefix: the
+resolved config name, the config URI, the endpoints, and the OCIO version. A
+consumer reads them to identify what an artifact was compiled from, and a
+consumer may read them off a model stored long before it runs. The
+prefix is an artifact format rather than the package name, and keeps the
+project's former name for that reason. It shall change only with a format
+version, so a model emitted before a rename stays readable.
 
 The tensor carries three channels. No transform in the pinned config
 touches alpha — every matrix carries an identity alpha row, every exponent
@@ -49,7 +57,10 @@ bypassing the arithmetic does not.
 executors, so a consumer picks its own runtime and inherits that runtime's
 fusion. A 1×1 convolution followed by a short elementwise chain is
 memory-bandwidth bound and fuses to a single pass — the same place a
-hand-written kernel lands.
+hand-written kernel lands. That holds for the short chains most transforms
+are; where it measurably breaks — the ACES 2.0 display renders, whose
+table lookups split the graph into memory-bound segments no executor
+rejoins — §spec:cuda-kernel carries the difference.
 
 *Rejected*: emitting **torch**, which couples every consumer to one
 framework for math that is framework-independent, and which has no
@@ -159,7 +170,7 @@ compiles, so the boundary is not visible from inside it. It is still stated
 as an op set rather than as a category, because that is what makes it
 predictable for the arbitrary config a caller hands over
 (§spec:problem-statement): the answer names the op that blocks them, and
-nothing is refused for the kind of transform it is. `ocio2onnx census`
+nothing is refused for the kind of transform it is. `ocio-codegen census`
 reports the split for any config against the op set the compiler actually
 implements rather than a second list beside it; `tools/census.py` is a shim
 over the same code.
@@ -468,6 +479,63 @@ float32 is not exact either, but the residual that showed up in practice
 was not float32's. It came from the oracle's own approximate `pow`, and
 clearing that flag removes it (§spec:verification). The caution above is
 about the consumer's executor, not about the reference.
+
+## CUDA kernel §spec:cuda-kernel
+*Status: complete*
+
+A graph executor pays a full-frame memory pass per fusion segment, and the
+ACES 2.0 display renders carry a chain those executors cannot rejoin: at 4K
+on an RTX 6000 Ada, 9 ms under TensorRT against the 0.3 ms one fused pass
+costs. The gap is structural, not tunable — reduced precision recovers a
+fifth, and baking the render into a shaped `Lut3D` fails outright: the
+gamut compressor has near-cusp curvature that a 129³ lattice still misses
+by 0.13 in display space on saturated brights. So the one transform class
+that defeats the graph ships beside it as a second artifact: a fused CUDA
+kernel.
+
+The kernel is not written here; it is transpiled from the shader OCIO's own
+GPU renderer emits for the same processor at the same optimization flags,
+so its math has the same author as the graph's and the two artifacts
+disagree only on arithmetic. The emitted `.cu` is self-contained — tables
+embedded as global-memory arrays, no includes, half conversion by PTX — and
+carries two planar RGB entry points, `apply_f32` and `apply_f16`. Alpha is
+absent for §spec:emitted-graph's reason. A consumer compiles the file with
+NVRTC and launches it on the stream its tensors already occupy; execution
+in production stays the consumer's concern (§spec:non-goals), and this
+module executes a kernel only to verify it.
+
+The transpiler covers the dialect OCIO emits for closed-form transforms
+and nearest-sampled 1D tables, which is the ACES 2.0 family and every
+analytic transform. What falls outside is refused by name before anything
+is emitted, as ops are (§spec:op-coverage): a uniform, which is a dynamic
+property the kernel would bake stale; and an interpolated or
+multi-dimensional texture, which is a LUT — the graph already carries
+those at full speed, so the refusal names the artifact that serves them.
+
+Coverage is measured, as the op census is. Of the pinned config's 159
+transforms, 119 transpile, compile, and agree with the oracle; the other
+40 carry a `Lut1D` whose table OCIO publishes as a two-dimensional texture,
+and are refused. No transform transpiles and then fails to compile. The
+prelude generates every GLSL builtin form OCIO's GPU emitters write —
+componentwise math over `vec2`/`vec3`/`vec4`, the mixed vector and scalar
+forms, the comparisons — from one table, because the shader text decides
+which forms a transform reaches, and a missing overload surfaces only as an
+NVRTC error in whichever transform first reaches it. NVRTC compiles for a
+named architecture without a device, so the suite compiles all 119 kernels
+in CPU-only CI and pins both counts; executing them stays GPU-gated.
+
+Verification holds the compiled kernel against the same lattice and CPU
+reference as the graph, at its own bound (`cuda.GPU_TOLERANCE`): GPU
+transcendentals are not libm, and OCIO's GPU renderer sits the same
+distance from its CPU renderer. The kernel is compiled and verified under
+`--use_fast_math`, which is the contract, not an option — it selects the
+hardware log2/exp2 paths GLSL's `pow` resolves to, and the accurate paths
+cost three times the whole kernel for a difference inside the band. Two
+measured facts govern the generated code: tables live in global memory
+because divergent indices serialize the constant cache 32-way, at five
+times the kernel's cost; and float literals carry suffixes because one
+unsuffixed literal drops an expression chain to double-precision
+arithmetic.
 
 ## Non-goals §spec:non-goals
 *Status: complete*
