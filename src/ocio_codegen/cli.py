@@ -23,6 +23,7 @@ import onnx
 from ocio_codegen import __version__, census
 from ocio_codegen.addressing import (
     DEFAULT_CONFIG,
+    GRADE_STYLES,
     AddressError,
     Resolved,
     enumerate_transforms,
@@ -97,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     emit.add_argument("--view", metavar="VIEW", help="view on --display")
     emit.add_argument(
+        "--grade",
+        choices=sorted(GRADE_STYLES),
+        help="lead the --display render with a live ASC CDL in this style, "
+        "its four parameters taken as inputs (§spec:graded-render)",
+    )
+    emit.add_argument(
         "-o", "--output", required=True, metavar="PATH", help="where to write the graph"
     )
     emit.add_argument(
@@ -157,11 +164,18 @@ def _resolve(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Resol
     if args.dst is not None:
         if args.src is None:
             parser.error("--to needs --from")
+        if args.grade is not None:
+            parser.error("--grade leads a --display render, not a --to conversion")
         return resolve_colorspaces(config, args.src, args.dst, uri=args.config)
     if args.view is None:
         parser.error("--display needs --view")
     return resolve_display_view(
-        config, args.display, args.view, src=args.src, uri=args.config
+        config,
+        args.display,
+        args.view,
+        src=args.src,
+        uri=args.config,
+        grade=args.grade,
     )
 
 

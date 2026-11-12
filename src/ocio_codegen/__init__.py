@@ -65,16 +65,23 @@ def compile_colorspaces(
 
 
 def compile_display_view(
-    display: str, view: str, *, src: str | None = None, config: str = DEFAULT_CONFIG
+    display: str,
+    view: str,
+    *,
+    src: str | None = None,
+    config: str = DEFAULT_CONFIG,
+    grade: str | None = None,
 ) -> onnx.ModelProto:
     """Compile the transform from a color space to a display view.
 
-    ``src`` defaults to the config's reference space. Refuses on the same
-    terms as ``compile_colorspaces``.
+    ``src`` defaults to the config's reference space. ``grade`` names an ASC
+    CDL style (``"ASC"``) for a render led by a live grade in ``src``, whose
+    four parameters the graph takes as inputs (§spec:graded-render). Refuses on
+    the same terms as ``compile_colorspaces``.
     """
     loaded = load_config(config)
     return compile_processor(
-        resolve_display_view(loaded, display, view, src=src, uri=config)
+        resolve_display_view(loaded, display, view, src=src, uri=config, grade=grade)
     )
 
 
