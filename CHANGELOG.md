@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/Fuse-Technical-Group/ocio-codegen/compare/v0.2.0...v0.2.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **cuda:** verify the kernel as a cubin, not PTX ([#29](https://github.com/Fuse-Technical-Group/ocio-codegen/issues/29)) ([7e1ee86](https://github.com/Fuse-Technical-Group/ocio-codegen/commit/7e1ee86b6ccad3be00fd3f1a801806939e0d7100))
+
 # [0.2.0](https://github.com/Fuse-Technical-Group/ocio-codegen/compare/v0.1.1...v0.2.0) (2026-09-21)
 
 

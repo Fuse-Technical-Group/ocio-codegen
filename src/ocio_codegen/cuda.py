@@ -540,6 +540,30 @@ def device_arch() -> str:
 def compile_ptx(source: str, arch: str | None = None) -> bytes:
     """Compile a generated kernel to PTX, or fail with NVRTC's own log.
 
+    ``arch`` is a virtual architecture (``compute_75``). PTX is what the
+    census compiles, with no device present.
+    """
+    return _compile(source, arch or device_arch(), cubin=False)
+
+
+def compile_cubin(source: str, arch: str | None = None) -> bytes:
+    """Compile a generated kernel to a cubin for one real architecture
+    (``sm_89``; the device's by default), or fail with NVRTC's own log.
+
+    Execution loads this rather than PTX. The driver JIT-compiles PTX, and a
+    driver older than the NVRTC that emitted it refuses that PTX even within
+    one CUDA major (minor-version compatibility covers binaries, not the
+    JIT), so verifying through PTX fails wherever the driver trails the
+    toolkit. A cubin needs no JIT.
+    """
+    return _compile(
+        source, arch or device_arch().replace("compute_", "sm_"), cubin=True
+    )
+
+
+def _compile(source: str, arch: str, *, cubin: bool) -> bytes:
+    """NVRTC over ``source`` for ``arch``, returning the PTX or the cubin.
+
     ``--use_fast_math`` is not an option here but the contract: it selects
     the hardware log2/exp2 paths GLSL's ``pow`` uses, `GPU_TOLERANCE` was
     measured under it, and the accurate paths cost 3x for a difference the
@@ -552,20 +576,22 @@ def compile_ptx(source: str, arch: str | None = None) -> bytes:
     )
     if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
         raise RuntimeError(f"NVRTC: {err}")
-    options = [
-        f"--gpu-architecture={arch or device_arch()}".encode(),
-        b"--use_fast_math",
-    ]
+    options = [f"--gpu-architecture={arch}".encode(), b"--use_fast_math"]
     (result,) = nvrtc.nvrtcCompileProgram(program, len(options), options)
     if result != nvrtc.nvrtcResult.NVRTC_SUCCESS:
         _, size = nvrtc.nvrtcGetProgramLogSize(program)
         log = b" " * size
         nvrtc.nvrtcGetProgramLog(program, log)
         raise RuntimeError(f"NVRTC refused the generated kernel:\n{log.decode()}")
-    _, size = nvrtc.nvrtcGetPTXSize(program)
-    ptx = b" " * size
-    nvrtc.nvrtcGetPTX(program, ptx)
-    return ptx
+    if cubin:
+        _, size = nvrtc.nvrtcGetCUBINSize(program)
+        code = b" " * size
+        nvrtc.nvrtcGetCUBIN(program, code)
+    else:
+        _, size = nvrtc.nvrtcGetPTXSize(program)
+        code = b" " * size
+        nvrtc.nvrtcGetPTX(program, code)
+    return code
 
 
 def run_kernel(
@@ -595,10 +621,10 @@ def run_kernel(
     count = planes.shape[1]
     host_in = planes if precision == "f32" else planes.astype(np.float16)
 
-    ptx = compile_ptx(source)
+    code = compile_cubin(source)
     context = _check(cu.cuDevicePrimaryCtxRetain(_check(cu.cuDeviceGet(0))))
     _check(cu.cuCtxSetCurrent(context))
-    module = _check(cu.cuModuleLoadData(ptx))
+    module = _check(cu.cuModuleLoadData(code))
     kernel = _check(cu.cuModuleGetFunction(module, entry.encode()))
 
     d_in = _check(cu.cuMemAlloc(host_in.nbytes))
